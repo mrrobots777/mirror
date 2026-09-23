@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: mirror
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 7000
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: RELAY_BASE_URL
+        sync: false
+      - key: TMDB_API_KEY
+        sync: false
+      - key: IPTV_SERVER
+        value: kakito.xyz
+      - key: IPTV_USERNAME
+        sync: false
+      - key: IPTV_PASSWORD
+        sync: false
+      - key: IPTV_PORT
+        value: 443
+      - key: CDN_PROXY
+        value: https://mirror-cdn.dev-avmirror.workers.dev
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=350
+      - key: NODE_ENV
+        value: production

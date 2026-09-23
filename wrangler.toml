@@ -1,0 +1,26 @@
+name = "mirror-cdn"
+main = "worker-simple.js"
+compatibility_date = "2024-01-01"
+
+# DECISAO 123 (30/09/2026) — worker fixado em Sao Paulo. O RTD so atende quem chama DO
+# BRASIL: medido, direto 403 de fora / 200 do Brasil, e via worker tambem — porque o
+# worker roda no data center de quem chamou, entao chamando da prod ele continuava fora
+# do Brasil e o RTD respondia 403 em tudo (play-link, catalog-index e o video).
+# MEDIDO 30/09: a dica de regao e ACEITA (fica gravada na conta como placement "targeted")
+# mas NAO se aplica nesta conta — com "aws:sa-east-1" o worker continuou no data center de
+# quem chama (prod = WAW/Varsovia), e ate "aws:ap-northeast-1" deu WAW. A linha fica porque
+# e o comportamento desejado e custa zero: se a Cloudflare passar a honra-la, o RTD volta sem
+# mexer em nada. O caminho em teste de verdade e o worker DEDICADO ao RTD
+# (`worker-rtd.js` + `wrangler-rtd.toml`, Smart Placement).
+[placement]
+region = "aws:sa-east-1"
+
+# R2 desligado de proposito: a conta ainda nao habilitou o R2 (a Cloudflare pede isso no
+# dashboard, com metodo de pagamento cadastrado). O codigo do worker ja esta pronto e so
+# usa o R2 se o binding "SEG" existir. Quando o R2 for habilitado, descomente estas 3 linhas.
+# [[r2_buckets]]
+# binding = "SEG"
+# bucket_name = "mirror-seg"
+
+[observability]
+enabled = true

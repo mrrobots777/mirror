@@ -1,0 +1,60 @@
+name: testes
+
+# CI do Mirror. Roda a cada push nas tres referencias e a cada pedido de PR.
+#
+# O QUE ESTE ARQUIVO TRAVA (medido 30/09/2026, auditoria): o projeto tinha 202 testes que
+# SÓ rodavam quando alguem lembrava (nao havia `.github/workflows`), e nenhuma checagem de
+# sintaxe — foi assim que o worker (que e ESM) pode quebrar sem o `node --test` acusar nada,
+# ja que o Node CommonJS nao le `export default`.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      # 20 = a versao do Dockerfile de producao (beamup constroi com node:20-slim).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: instala as dependencias
+        run: npm ci --no-audit --no-fund
+
+      - name: sintaxe do servidor e do scraper (CommonJS)
+        # O worker NAO entra aqui: ele e modulo ESM (`export default`) e o `node -c` do
+        # CommonJS nele da SyntaxError. A primeira versao deste arquivoincluiu o worker e a
+        # propria CI caiu — que e exatamente para isso que ela existe.
+        run: |
+          set -e
+          for f in src/server.js $(ls src/core/*.js src/lib/*.js src/scrapers/*.js src/routes/*.js); do
+            node -c "$f"
+          done
+
+      - name: sintaxe do worker (e modulo ESM, entao o Node CommonJS nao le)
+        run: |
+          set -e
+          cp worker-simple.js /tmp/worker-check.mjs
+          node --check /tmp/worker-check.mjs
+          rm -f /tmp/worker-check.mjs
+
+      - name: barra de testes
+        run: node --test test/
+
+      - name: confere que nenhum teste foi removido
+        # A barreira subiu a cada decisao (191 -> 193 -> 198 -> 201 -> 202 -> 204 -> 224 -> 225 -> 232). Um teste que
+        # "sumiu" para a build passar e o jeito mais facil de perder regra sem ninguem ver.
+        run: |
+          total=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
+          echo "testes: $total"
+          if [ "$total" -lt 254 ]; then
+            echo "a barra de testes caiu (esperado 254 ou mais)"
+            exit 1
+          fi

@@ -1,0 +1,15 @@
+node_modules/
+nuvio/node_modules/
+nuvio/dist/
+nuvio/public/idx/
+.opencode/
+cache/
+.cache/
+*.log
+dist/
+*.db
+*.db-shm
+*.db-wal
+.env
+beamup.json
+*.wasm
