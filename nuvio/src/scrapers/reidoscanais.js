@@ -3,7 +3,8 @@ const { coletar } = require("../lib/extrator");
 const { de } = require("../lib/canal");
 const { novo } = require("../core/sandbox");
 const { UA } = require("../lib/ua");
-const { sinaliza } = require("../lib/hls");
+const { provaPlaylist, sinaliza } = require("../lib/hls");
+const { aoVivo: streamDeTv } = require("../lib/apresentacao");
 
 const FONTE = "rcd";
 const SIGLA = "RCD";
@@ -13,11 +14,6 @@ const MAX_EMBEDS = 6;
 const RODADAS = 2;
 const API = "https://api.reidoscanais.st/channels";
 const SITE = "https://reidoscanais.st/";
-
-function contaSegmentos(texto) {
-  if (!texto.includes("#EXTM3U")) return 0;
-  return texto.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length;
-}
 
 function erroDeRede(e) {
   return /socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|aborted|timeout|fetch failed|network|HTTP 429|HTTP 5\d\d/i.test(String((e && e.message) || e));
@@ -35,7 +31,9 @@ function noAr(canal) {
   const epg = canal && canal.epg;
   const atual = epg && epg.current;
   if (!atual || !atual.title) return "";
-  const partes = [`📺 ${atual.title}`];
+  // Sem emoji: o 📺 ja abre a linha 1 (o nome do canal), e dois no mesmo card
+  // enchem a tela sem dizer nada novo.
+  const partes = [String(atual.title)];
   if (atual.formatted_time) partes.push(atual.formatted_time);
   if (epg && epg.next && epg.next.title) partes.push(`A seguir: ${epg.next.title}`);
   return partes.join(" · ");
@@ -54,9 +52,11 @@ async function tentaEmbed(embed, p) {
   const hls = coletar(r2.texto, { base: player }).find((c) => /\.m3u8/i.test(String(c.url || "")));
   if (!hls) return { erro: "player sem m3u8" };
   const pl = await pegarTexto(hls.url, { ms: Math.min(MS, p.ms()), headers: { Referer: player, "User-Agent": UA } });
-  if (pl.status === 429 || pl.status >= 500) throw new Error(`rcd playlist HTTP ${pl.status} (nao e prova)`);
-  if (!pl.ok) return { erro: `playlist HTTP ${pl.status}` };
-  if (contaSegmentos(pl.texto) < 1) return { erro: "playlist sem segmento" };
+  const prova = provaPlaylist(pl.status, pl.texto);
+  if (prova === "morta") return { erro: `playlist HTTP ${pl.status}` };
+  // "indeciso": a origem recusou ESTE IP, e a cadeia achou um token de verdade. O
+  // aparelho do usuario baixa do IP residencial dele, entao entrega-se o link.
+  if (prova === "indeciso") console.log(`[RCD] ${hls.url.slice(0, 60)} respondeu HTTP ${pl.status} a este IP — o canal entra na lista mesmo assim`);
   return { url: hls.url, referer: player };
 }
 
@@ -96,11 +96,14 @@ module.exports.getStreams = async (id, mediaType) => {
     return [];
   }
   if (!src) return [];
-  const linha = noAr(bruto);
-  return [{
-    name: SIGLA,
-    title: `☁️ ${alvo.nome} · ${SIGLA}${linha ? `\n${linha}` : ""}`,
+  return [streamDeTv({
+    sigla: SIGLA,
+    titulo: alvo.nome,
+    // O guia que a propria origem entrega no JSON do canal entra na linha 2, que
+    // no app e o `title` do stream (a `description` so existiria se mandassemos
+    // `size`/`language`, e o plugin nao manda nenhum dos dois).
+    detalhe: noAr(bruto),
     url: sinaliza(src.url),
     headers: { Referer: src.referer, "User-Agent": UA }
-  }];
+  })];
 };

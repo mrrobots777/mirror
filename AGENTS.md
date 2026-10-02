@@ -947,13 +947,51 @@ TV (nuvio/tools/bateria-tv.js, 16 canais × 4 fontes):
   emb 6/16 · etc 6/16 · rcd 4/16                               (iguais ao antes)
   rei sem stream: 1021/1041/1101 — playlist morta na origem deles
 
-node --test test/   # 259  (247 + 12 novos em test/nuvio-fontes-tv.test.js, todos SEM rede)
+node --test test/   # 285  (259 + 18 do contrato de apresentação + 7 do prazo de corpo + 1 repartido, todos SEM rede)
 ```
 
 Os 12 novos: contrato do `sinaliza` · os 4 emissores assinando · os tetos do orçamento do REI ·
 o REI sem `Referer` · a cadeia do REI com **origem falsa** (viva → stream sinalizado · 404 → `[]`
 com ≥2 sondas · 404 na cadeia → `[]` · **rede → rejeita**) · derivacão do worker + varredura ·
 reserva do ATO (recusa → reserva, recusa não paga duas vezes, 404 → sem reserva).
+
+### 2ª rodada de 02/10/2026 — o contrato de tela, o prazo de corpo e a qualidade real
+
+Detalhe em [`nuvio/STATUS.md`](nuvio/STATUS.md) §1c e em `CONTEXTO.md`. As cinco coisas que
+mudam para quem mexe no plugin:
+
+1. **O Nuvio monta a tela em três lugares** e isso dita o contrato: linha 1 = `name` + `" - "` +
+   `quality` (o **app** anexa a qualidade); linha 2 = `description ?: title`; badge =
+   `addonName` do **manifesto** (`maxLines = 1`). Sem `quality` o app escreve
+   `stream_quality_unknown` = **"Desconhecido"** em pt-BR — e **13 das 15 fontes** devolviam
+   sem ele. Mandar `language`/`size` **esconde** o `title`, então não se manda. E
+   `LocalScraperResult` é data class do Moshi: campo a mais pode quebrar o parse em runtime.
+
+2. **`nuvio/src/lib/apresentacao.js` é o único lugar que monta o objeto de stream**; as 15
+   fontes passam por `apresenta()` (TV por `aoVivo()`), e um teste falha se alguma montar na
+   mão. A `sigla` vem do scraper porque `core/fontes.js` é tooling-only.
+
+3. **`nuvio/src/lib/http.js`: o prazo cobre os headers E o corpo.** O defeito mais geral da
+   rodada — `Promise.race([fetch, estouro])` termina nos headers e limpava o relógio no
+   `finally`, deixando o `res.text()` sem limite. Medido no DGO: headers 0,23 s, corpo 15,1 s.
+   **DGO 21,3 s → 5,7 s.**
+
+4. **`nuvio/src/lib/painel.js`: direto e reserva em paralelo escalonado (2,5 s)** — ATO
+   **9,9 s → 4,1 s**. E **o relógio nunca é limpo antes do `await` da outra ponta** (limpar
+   deixava a reserva esperando um timer morto). Em `fonte-painel.js`, o catálogo gzip virou
+   **corrida** com o shard (era `await catalogo` e *depois* `await shard`, e o BLZ gastava 12 s
+   de 15 s num catálogo que nem responde).
+
+5. **403/429 de IP de datacenter não é canal morto, em TV e em VOD.**
+   `lib/hls.js::provaPlaylist()` é a régua única das 4 fontes de TV (descarta 404/410/451 e
+   2xx sem segmento; não descarta 403/429/5xx/timeout/rede) — **RCD passou de 0 para 1 stream**,
+   porque o vídeo é baixado pelo aparelho, do IP residencial dele. `tools/provar-links.js`
+   segue a mesma régua (`INDECISO`/`BLOQUEADO` ≠ `MORTO`), senão a bateria acusa de morta uma
+   fonte que o aparelho toca.
+
+`nuvio/tools/bateria-completa.js` é a bateria do pedido (15 fontes × N casos: tempo, entrega,
+contrato, qualidade, link vivo, e "o canal não existe nesta fonte" separado de "a fonte tem e
+não entregou"). Medido depois: **16/16 casos tentados entregam stream, 0 erro, 0 vazio.**
 
 **Só se prova no aparelho (3 coisas, documentadas em `nuvio/STATUS.md` §4):** o teto de 1 MB do
 sandbox (bytes de rede ou corpo decodificado) · o bloqueio de IP de datacenter (vídeo do ATO, CDN
@@ -1077,7 +1115,7 @@ A categoria de cada fonte é declarada **uma vez** em `src/core/nomes.js` (`FONT
 > **Node local = 18 (`/usr/bin/node`), não o 22.** O `better-sqlite3` foi compilado (09/2025) contra o ABI do **Node 18**; rodar com o Node 22 (`/tmp/node-v22.*`) faz `sqlite-cache.js` **despejar core (SIGSEGV, exit 139)** logo no boot — o processo morre sem mensagem nenhuma no log, só `[dns] Cloudflare DNS ativo` e nada mais. Parece bug de código e não é: `require('./src/lib/sqlite-cache')` isolado reproduz. Para confirmar em 5s: `/usr/bin/node -e "require('./src/lib/sqlite-cache')"` (node18 → `opened cache.db`; node22 → core dump).
 
 ```bash
-# Testes unitários (barreira: 259)
+# Testes unitários (barreira: 285)
 node --test test/
 
 # Verificar sintaxe
@@ -1258,7 +1296,7 @@ ssh dokku@a.baby-beamup.club logs e75602c18409-mirrorhub -n 50   # = beamup logs
 
 - **CI em todo push** (`/.github/workflows/testes.yml`): sintaxe do server/scrapers CommonJS,
   sintaxe do worker (**ESM — `node -c` nele dá SyntaxError**, por isso o passo separado), a
-  barreira `node --test test/` e um **piso de contagem** (hoje **254**) para pegar teste que
+  barreira `node --test test/` e um **piso de contagem** (hoje **285**) para pegar teste que
   "sumiu". Rode local com `node --test test/` antes de pushar.
 - **O site do plugin** (`https://mrrobots777.github.io/mirror/`) é publicado por
   `/.github/workflows/publicar-pages.yml` — vê `nuvio/STATUS.md` §5 (duas armadilhas medidas

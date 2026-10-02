@@ -2,6 +2,7 @@ const H = require("../lib/html");
 const { pegar, pegarJson } = require("../lib/http");
 const { matchVodTitle, matchScore } = require("../lib/match");
 const { extractQuality } = require("../lib/quality");
+const { apresenta } = require("../lib/apresentacao");
 const { literal } = require("../lib/extrator");
 const { UA } = require("../lib/ua");
 const { TETO_CORPO_BYTES } = require("../core/sandbox");
@@ -184,16 +185,22 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
       if (!escolhido.length) continue;
       const dublado = /dublad/i.test(`${cand.titulo} ${cfg.slug}`);
       const idioma = dublado ? "Dublado" : "Legendado";
-      return escolhido.map((url) => {
-        const qualidade = extractQuality(url);
-        return {
-          name: SIGLA,
-          title: [qualidade, idioma, SIGLA].filter(Boolean).join(" · "),
-          url,
-          ...(qualidade ? { quality: qualidade } : {}),
-          headers: { Referer: REFERER, "User-Agent": UA }
-        };
-      });
+      return escolhido.map((url) =>
+          apresenta({
+            sigla: SIGLA,
+            url,
+            qualidade: extractQuality(url),
+            idioma,
+            titulo: meta.titulos[0],
+            ano: meta.ano,
+            temporada: cfg.temporada,
+            episodio: cfg.episodio,
+            // MEDIDO: o CDN do DGO responde 403 sem este `Referer`. Como o Nuvio so
+            // manda cabecalho quando o scraper declara, perder o campo aqui e a
+            // diferenca entre o player tocar e dar 403 (bateria 02/10/2026: 403).
+            headers: { Referer: REFERER, "User-Agent": UA }
+          })
+        );
     } catch (e2) {
       if (!erro) erro = e2;
     }

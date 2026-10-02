@@ -1,8 +1,9 @@
 # STATUS — plugin Mirror/Nuvio
 
 Data da medição: **01/10/2026** (rodada da reorganização, mesma dia da tabela anterior), com a
-**rodada de 02/10/2026 em §1b** (MIME do player, orçamento do REI, reserva do ATO) e **§5
-atualizado com a publicação**. Barreira de testes hoje: **259**.
+**rodada de 02/10/2026 em §1b** (MIME do player, orçamento do REI, reserva do ATO), a
+**rodada de 02/10/2026 (2ª) em §1c** (contrato de apresentação, prazo de corpo, qualidade real,
+prova de TV) e **§5 atualizado com a publicação**. Barreira de testes hoje: **285**.
 Servidor de teste: **IP de datacenter** (a origem que barra datacenter reprova aqui e
 funciona no aparelho — está anotado linha a linha).
 Build: `node build.js` → `dist/` com **15 `.js` + `manifest.json`**, e o `manifest.json` é
@@ -254,6 +255,173 @@ TV (16 canais × 4 fontes):
 
 ---
 
+## 1c. Rodada de 02/10/2026 (2ª) — o pedido: velocidade, 100% das fontes, limpeza e o nome na tela
+
+O dono pediu: *"uma bateria de exames e testes ponta a ponta para melhorar a velocidade de
+resolução e fazer com que todas as fontes [funcionem] 100%, quero que elas sejam sempre
+pesquisadas e que se achar apareça o player, também quero uma limpeza e otimização do código
+como também quero que normalize o nome original das fontes como aparece dentro do Nuvio com o
+plugin instalado"*.
+
+**Antes e depois, medido pela bateria nova (`tools/bateria-completa.js`):**
+
+| | antes | depois |
+|---|---|---|
+| fontes que lançaram erro | 0 | **0** |
+| casos tentados que entregaram stream | 12/15 | **16/16** |
+| `blz` (Matrix) | **0 stream em 15,0 s** | 1 stream em 23,6 s |
+| `ato` (Matrix) | 2 streams, 9,9 s | 3 streams, **4,1 s** |
+| `vzr` (Matrix) | **0 stream** | 1 stream |
+| `dgo` (Pousando no Amor) | 1 stream, 403 sem `Referer` | 1 stream, **5,7 s**, link vivo |
+| `rcd` (HBO 2) | **0 stream** | 1 stream |
+| linha 1 escrevendo "Desconhecido" | 13 das 15 fontes | **4** (as que a origem recusa deste IP) |
+
+### a) O nome na tela: o contrato de apresentação (`src/lib/apresentacao.js`)
+
+**O que o app faz com o objeto**, lido em `StreamRepositoryImpl.toPluginStream` e
+`Stream.getDisplayDescription`:
+
+- a **linha 1** é `name`, e o app **acrescenta `" - <quality>"`** — e quando `quality` vem
+  vazio escreve o rótulo de localização `stream_quality_unknown`, que em pt-BR é
+  **"Desconhecido"**;
+- a **linha 2** é `description ?: title`, e `description` só existe se o scraper mandar
+  `size` ou `language`;
+- o **badge** lateral é `addonName`, que vem do `name` do **manifesto**, com `maxLines = 1`.
+
+Medido: **13 das 15 fontes devolviam stream sem `quality`**, então quase toda linha da tela
+dizia "Desconhecido" — e a sigla aparecia três vezes (no `name`, no fim do `title` e no badge).
+Agora existe **um lugar só** que monta o objeto, e ele é `apresenta()`:
+
+```
+linha 1   Matrix (1999) - 1080p        <- o app acrescenta a qualidade
+linha 2   Legendado · S01E03 · BLZ      <- uma informação por peça, a sigla no fim
+badge     BLZ                            <- vem do manifesto
+```
+
+A sigla vai no fim do `title` **além** do badge porque o app tem a opção *"agrupar por
+repositório"*: com ela ligada o badge das 15 fontes vira só "Mirror", e sem a sigla no `title`
+a origem sumiria da tela.
+
+Duas regras que esse módulo impõe:
+
+- **não se manda `language` nem `size`.** O app monta `description` como `"size • language"` e
+  usa `description ?: title` — mandar os dois **esconderia** o `title`, que é a linha 2.
+- **campo desconhecido não entra.** `LocalScraperResult` é um data class do Moshi, e campo a
+  mais pode fazer o parse falhar em runtime. O conjunto aceito é fechado e travado em teste.
+
+### b) A qualidade é a resolução REAL, lida do vídeo
+
+`src/lib/qualifica.js` + `src/lib/video-probe.js` (porta do `video-probe.js` do addon):
+**160 KB de Range**, SPS em MPEG-TS e VisualSampleEntry em MP4, com **prazo de 3 s** —
+medido, não arbitrado: no SPC a leitura leva **358–514 ms** e acha 1920×800 (1080p); no BLZ a
+origem demora 20 s até responder um Range, e 3 s é o ponto em que o vídeo também ia demorar
+para o usuário.
+
+**Três defeitos da porta, todos medidos:**
+
+1. `ms` era `undefined` no `probeVideoInfo` e o `catch` engolia o `ReferenceError` devolvendo
+   `null` em **1 ms** — nenhuma fonte recebia qualidade;
+2. a sonda ignorava o **`#EXT-X-MAP`** do fMP4, que é onde a resolução está (o SPT serve
+   `init.mp4` + segmentos `.js`): lia o segmento de mídia e não achava nada;
+3. o teto era **por requisição**, não da sonda: o DGO fazia 3 leituras de 3 s = **12,2 s**.
+
+Nada é inventado: se a leitura falha, o campo continua vazio e a linha repete o que o app
+escreve. E a resolução de um stream **não** é propagada para os outros da mesma fonte — um
+painel pode ter 720p e 1080p do mesmo filme, e preencher os dois com uma leitura seria
+mentira (regra da decisão 36 do addon).
+
+A sonda é aplicada pela **build** (`entradaDe()` embrulha os 15 `getStreams`), não por
+lembrete em cada fonte: são 15 arquivos, e "lembrar de chamar" é o que se esquece na 16ª.
+`MIRROR_QUALIDADE=nunca` desliga.
+
+### c) O prazo de uma chamada cobre os headers **e** o corpo
+
+O defeito mais geral da rodada. `pegar` resolvia `Promise.race([fetch, estouro])` — que termina
+quando os **headers** chegam — e limpava o relógio no `finally`, então o `res.text()` ficava
+**sem tempo limite**. Medido no DGO (`forks-doramas.madfirebox.shop`): headers em **0,23 s** e
+corpo de 24 KB pronto em **15,1 s**. A fonte pagava 15,6 s com um teto de 8 s, e um
+`getStreams` podia passar do orçamento do Nuvio sem ninguém perceber.
+
+Agora os métodos de corpo são embrulhados para estourar no mesmo prazo, e o `abort` do fetch é
+traduzido para `timeout de Xms em <url>` (sem isso o chamador via só "aborted").
+
+**DGO: 21,3 s → 5,7 s**, e a fonte continua entregando. O ganho é de todo o plugin.
+
+### d) A reserva do painel em paralelo escalonado (`src/lib/painel.js`)
+
+`get_vod_info` responde em **20,0 s** no BLZ (3 rodadas: 20,06 / 20,01 / 20,14 s), **0,05 s** no
+SPC e **não responde** no ATO deste IP. A versão antiga pagava o timeout inteiro do direto
+antes de tentar a reserva: ATO levava 9,9 s para entregar 2 streams. Agora os dois correm em
+paralelo com a reserva **escalonada em 2,5 s** — origem rápida ganha sem gastar uma chamada no
+worker, origem travada não espera o timeout. **ATO: 9,9 s → 4,1 s.**
+
+Os detalhes dos candidatos passaram a ser pedidos **em paralelo** (`CONC_DETALHE`): em
+sequência seriam 3 × 20 s = 60 s no BLZ, acima do teto do Nuvio.
+
+E o catálogo gzip especulativo parou de **roubar o orçamento**: a versão antiga fazia
+`await catalogo` e **depois** `await shard`, então o BLZ gastava 12 s de 15 s num catálogo que
+ele nem usa (nem responde em 12 s), sobrava 2,9 s para o `get_vod_info` que leva 20 s, e a
+fonte devolvia `[]` depois de 15 s. Agora é uma **corrida**: o primeiro que entregar item vence
+e o perdedor é solto sem `await`.
+
+### e) 403/429 de IP de datacenter não é canal morto (TV)
+
+As 4 fontes de TV tinham cada uma a sua `contaSegmentos` e o seu tratamento de status, e as
+quatro divergiam. Agora é `provaPlaylist()` em `lib/hls.js`:
+
+- **descarta**: 404/410/451, ou 2xx sem `#EXTM3U` e sem segmento;
+- **não descarta**: 403, 429, 5xx, timeout, rede.
+
+Medido no RCD (`cdn-sp2.satlabscloud.com.br`): a cadeia de 3 saltos resolve e entrega
+`index.m3u8?token=…` — um token de verdade — mas a playlist responde **403 a este IP**. Como o
+vídeo é baixado pelo aparelho do usuário, do IP residencial dele, isso não prova que o canal
+esteja morto. **RCD passou de 0 para 1 stream em HBO 2**, e o canal aparece na lista.
+
+É a régua do resto do projeto (decisões 131/134) e a que a própria ferramenta de medição passou
+a usar: `provar-links.js` separa `INDECISO` (429) e `BLOQUEADO` (recusa a datacenter) de
+`MORTO`, senão a bateria acusa de morta uma fonte que o aparelho toca.
+
+### f) O VZR estava jogando fora um stream vivo
+
+`provaDeVida` seguia o redirect e condenava o link pelo `content-type`. Medido: a origem
+responde 302 para um CDN assinado e esse CDN responde **429** a este IP — o VZR devolvia `[]`
+para Matrix. Agora a prova **não segue o redirect** (302 para CDN assinado é prova de vida) e
+**429 nunca condena**.
+
+### g) A bateria nova — `tools/bateria-completa.js`
+
+É a "bateria de exames" do pedido: as 15 fontes, N casos cada, medindo **tempo**, **entrega**,
+**o contrato que o app vai ler**, **qualidade real** e **link vivo**. E separa **"o canal não
+existe nesta fonte"** de **"a fonte tem e não entregou"** — defeitos de natureza oposta (na
+rodada anterior, 6 dos 12 casos de TV eram o primeiro caso e a bateria os contava como falha).
+
+```
+casos: 19 | canal nao existe nesta fonte: 3 | tentados: 16
+com stream: 16/16 | lancou erro: 0 | devolveu vazio: 0
+sem nenhum link vivo comprovado: 2 de 16   (blz e rcd — a origem recusa este IP)
+sem qualidade real: 4 de 16                (blz, ato, dgo, vzr — todos por recusa do IP)
+```
+
+As 4 sem qualidade e as 2 sem link vivo são **a mesma coisa**: origens que respondem 403/429 a
+IP de datacenter. Do IP residencial do aparelho a leitura funciona — e isso só se prova no
+aparelho (§4).
+
+### h) Limpeza
+
+- **`http.js`**: `comPrazo()` embrulha só os métodos que a resposta tem — um duplo de teste ou
+  um `fetch` parcial não tem `json`/`blob`, e exigir `.bind` no que não existe estourava a
+  chamada inteira.
+- **`sandbox.js`**: `sobra()` (quanto resta do orçamento, sem teto de 8 s) separado de `ms()` (o
+  que **uma chamada** deve pedir). Misturar os dois dava `Math.min(1, sobra) === 1` num guarda
+  "faltam 1,5 s?", que disparava sempre.
+- **`fonte-painel.js`**: `montaLinha()` saiu (o contrato faz esse trabalho) e o laço de detalhes
+  virou uma chamada só, com os candidatos em paralelo.
+- **A `sigla` sai do próprio scraper, não do registro.** `src/core/fontes.js` continua
+  tooling-only (não entra em nenhum bundle); o vínculo é travado por teste.
+- **Armadilha deste ambiente**: o `node` daqui rejeita `const { x as y }`. Use a forma com
+  dois-pontos, que é o padrão do repo.
+
+---
 ## 2. O que entrou na rodada das fontes
 
 ### `src/scrapers/aon.js` (animesonline.io)
@@ -341,6 +509,15 @@ próprio anime (ver acima).
    registro`), e apaga de `dist/`/`public/` o que sobrar.
 2. **`manifest.json` não existe na raiz do repo** (§0) — e não precisa: o Pages está em modo
    `workflow` e serve `nuvio/public/` como raiz (§5).
+3. **A versão do manifesto não sai do `package.json`.** Hoje `VERSAO_REPOSITORIO` e
+   `VERSAO_SCRAPER` são constantes em `src/core/fontes.js` (`1.0.0`), enquanto o
+   `package.json` vai em `1.0.1` e o commit em `1.0.1`. O Nuvio compara versão para
+   checar atualização, então um dia de release pode não aparecer na tela. **Não foi mexido
+   nesta rodada** (é mudança de empacotamento, não de fonte) — pendente de decisão.
+4. **O BLZ leva ~24 s** e é o piso de latência do plugin. MEDIDO: `get_vod_info` do
+   `kakito.xyz` responde em 20,0 s (3 rodadas) e o **link de vídeo também leva 20,5 s** para
+   responder 302. É a origem, não o código — o dono autorizou pagar ~25 s. Se a origem
+   normalizar, o teto de 30 s (`TETO_MS` em `lib/fonte-painel.js`) fica folgado.
 
 ---
 
@@ -412,7 +589,7 @@ Nada disso é bloqueante para instalar — são as três coisas a olhar no prime
 **Publicado.** `nuvio/` está versionado neste repositório (o repo é `mrrobots777/mirror`, o que o
 `origin` antigo `devavmirror/mirror` não existe mais — medido: `gh repo view` responde
 "Could not resolve"), o CI **`.github/workflows/testes.yml`** roda a barreira em todo push
-(piso **254**; hoje **259**) e o `publicar-pages` sobe o site. Verificado no ar em 02/10/2026:
+(piso **285**; hoje **285**) e o `publicar-pages` sobe o site. Verificado no ar em 02/10/2026:
 `/manifest.json` → **200 com 15 scrapers**, `/rei.js` → 200, `/idx/indice.json` → 200.
 
 ### Medir de novo a qualquer momento

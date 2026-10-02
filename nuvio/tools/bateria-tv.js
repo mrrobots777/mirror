@@ -61,7 +61,7 @@ async function umaFonte(chave, id) {
     chave,
     ms,
     streams: lista.length,
-    vivos: res.filter((r) => r.veredito === "ok").length,
+    vivos: res.filter((r) => ["ok", "INDECISO", "BLOQUEADO"].includes(r.veredito)).length,
     ruins: res.filter((r) => ["MORTO", "RUIM", "STUB", "VAZIO"].includes(r.veredito)).length,
     bytes: res[0] ? res[0].bytes : 0,
     status: res[0] ? res[0].status : 0,

@@ -11,6 +11,10 @@ function novo(totalMs) {
     limite,
     gasto: () => Date.now() - inicio,
     passou: () => Date.now() > limite,
+    // Quanto ainda resta do orcamento, sem teto de 8 s. `ms()` e o que uma CHAMADA
+    // deve pedir; `sobra()` e o que a invocacao ainda tem. Misturar os dois dava
+    // `Math.min(1, sobra) === 1` num guarda "faltam 1,5 s?" — que disparava sempre.
+    sobra: () => limite - Date.now(),
     ms: () => Math.max(1, Math.min(TEMPO_FETCH_PADRAO_MS, limite - Date.now()))
   };
 }

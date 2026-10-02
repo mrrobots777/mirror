@@ -39,7 +39,10 @@ async function roda(chave, caso) {
   for (let i = 0; i < alvos.length; i += conc) {
     res.push(...(await Promise.all(alvos.slice(i, i + conc).map(provar))));
   }
-  const vivos = res.filter((r) => r.veredito === "ok").length;
+  // `INDECISO` (429/timeout) e `BLOQUEADO` (recusa a IP de datacenter) NAO sao
+  // link morto: e a regua do runtime (decisoes 131/134) aplicada a medicao, senao a
+  // bateria acusa de morta uma fonte que o aparelho do usuario vai tocar.
+  const vivos = res.filter((r) => ["ok", "INDECISO", "BLOQUEADO"].includes(r.veredito)).length;
   const ruins = res.filter((r) => ["MORTO", "RUIM", "STUB", "VAZIO"].includes(r.veredito)).length;
   return { chave, ms, streams: lista.length, vivos, ruins, amostra: res[0], url: (lista[0] && lista[0].url) || "" };
 }

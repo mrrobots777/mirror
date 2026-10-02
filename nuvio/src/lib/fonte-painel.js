@@ -6,11 +6,34 @@ const { normalizeLoose, stripYear } = require("./text");
 const { pegar, pegarJson } = require("./http");
 const { UA } = require("./ua");
 const painelApi = require("./painel");
+const { apresenta } = require("./apresentacao");
 
-const TETO_MS = 15e3;
+// Orcamento da invocacao. O Nuvio da 60 s por scraper e roda 10 em paralelo
+// (PLUGIN_TIMEOUT_MS / MAX_CONCURRENT_SCRAPERS), entao este teto e por fonte, nao
+// global — as outras 14 fontes ja apareceram enquanto esta espera.
+//
+// MEDIDO 02/10/2026 deste servidor: `get_vod_info` do BLZ responde em 20,0 s
+// (2 rodadas: 20,05 s e 19,94 s), o do SPC em 0,05 s e o do ATO nao responde
+// direto (so pela reserva). Com o teto antigo de 15 s o BLZ gastava 12 s numa
+// busca especulativa de catalogo, sobrava 2,9 s para o detalhe — e devolvia
+// `[]` depois de 15 s. O dono autorizou pagar ~25 s para entregar link.
+const TETO_MS = 30e3;
+// O catalogo gzip e ESPECULATIVO: o shard do indice e estatico e responde em
+// centenas de ms, entao nunca vale esperar o catalogo. O teto e curto de
+// proposito — se o painel nao entrega o catalogo em 5 s, o shard assume e o
+// catalogo e esquecido sem erro.
+const MS_CATALOGO = 5e3;
 const MS_SHARD = 6e3;
 const MAX_TENTATIVAS = 3;
 const MAX_RESULTADOS = 12;
+// Os detalhes sao pedidos EM PARALELO. Medido: sao 20 s cada no BLZ, entao pedir
+// os 3 candidatos em sequencia custaria 60 s (acima do teto do Nuvio) e ainda
+// devolveria vazio. Em paralelo os 3 custam 20 s.
+const CONC_DETALHE = 3;
+
+function restante(p, ms) {
+  return Math.max(1, Math.min(Number(ms) || 1, p.limite - Date.now()));
+}
 
 // MEDIDO: os tres paineis escrevem o catalogo em portugues ("Breaking Bad A Quimica do Mal",
 // "Pânico 7", "Meteor City"), e o `matchVodTitle` do projeto e propositalmenteDURO — ele
@@ -175,7 +198,7 @@ async function catalogoGzip(painel, ms) {
   let r = null;
   try {
     r = await pegar(url, {
-      ms: Math.min(Number(ms) || 12e3, 12e3),
+      ms: Math.min(Number(ms) || MS_CATALOGO, MS_CATALOGO),
       headers: { Accept: "application/json", "Accept-Encoding": "gzip", "User-Agent": UA }
     });
   } catch (e) {
@@ -203,6 +226,41 @@ async function catalogoGzip(painel, ms) {
   const itens = dados.map(itemDeCatalogo).filter(Boolean);
   if (!itens.length) return { itens: null, motivo: "catalogo sem itens" };
   return { itens, motivo: "", bytes: texto.length };
+}
+
+// O shard do indice e o catalogo gzip do painel sao DOIS caminhos para os mesmos
+// itens, entao nao ha motivo para esperar um depois do outro. MEDIDO 02/10/2026: o
+// shard e um arquivo estatico e responde em centenas de ms; o catalogo gzip do
+// BLZ nao respondeu em 12 s (2 rodadas) e o do ATO nunca responde deste IP.
+//
+// MEDIDO o custo da versao antiga, que fazia `await catalogo` e DEPOIS
+// `await shard`: o BLZ gastava 12 s do orcamento de 15 s num catalogo que ele
+// nem usa, sobrava 2,9 s para o `get_vod_info` (que leva 20 s) e a fonte
+// devolvia `[]` depois de 15 s — 15 s perdidos e zero entrega.
+//
+// Aqui o primeiro que ENTREGAR ITEM vence e o perdedor e solto sem `await` e sem
+// erro. Se nenhum entregar na primeira volta, espera-se o outro antes de desistir.
+async function primeiroQueEntrega(painel, st, o, ns) {
+  const comItens = (r) => !!(r && r.itens && r.itens.length);
+  const rotuloShard = (r) => `shard do indice (${r.itens.length} itens de /idx/${ns}/)`;
+  const rotuloCatalogo = (r) => `catalogo gzip do painel (${r.itens.length} itens, ${r.bytes} B)`;
+  const ganhou = async (r, rotulo) => {
+    if (!comItens(r)) return null;
+    if (!o.calado) console.log(`[${painel.sigla}] caminho: ${rotulo(r)}`);
+    return r.itens;
+  };
+  const shard = Promise.resolve(st.shard).then((r) => ganhou(r, rotuloShard), () => null);
+  if (!st.catalogo) {
+    const itens = await shard;
+    if (!itens) console.log(`[${painel.sigla}] sem indice e sem catalogo — ${SEM_INDEX}`);
+    return itens || [];
+  }
+  const catalogo = Promise.resolve(st.catalogo).then((r) => ganhou(r, rotuloCatalogo), () => null);
+  const primeiro = await Promise.race([shard, catalogo]);
+  if (primeiro) return primeiro;
+  const perdedor = (await Promise.all([shard, catalogo])).find(Boolean);
+  if (!perdedor) console.log(`[${painel.sigla}] sem indice e sem catalogo — ${SEM_INDEX}`);
+  return perdedor || [];
 }
 
 function criaFonte(painel, opcoes) {
@@ -233,16 +291,7 @@ function criaFonte(painel, opcoes) {
         st.shard = busca(chavesDe(titulos), { ns, ms: MS_SHARD });
         st.shard.catch(() => {});
       }
-      const peloCatalogo = st.catalogo ? await st.catalogo.catch(() => null) : null;
-      const peloShard = await st.shard;
-      if (peloCatalogo && peloCatalogo.itens && peloCatalogo.itens.length) {
-        itens = peloCatalogo.itens;
-        if (!o.calado) console.log(`[${painel.sigla}] caminho: catalogo gzip do painel (${peloCatalogo.itens.length} itens, ${peloCatalogo.bytes} B)`);
-      } else {
-        itens = peloShard.itens;
-        if (!o.calado) console.log(`[${painel.sigla}] caminho: shard do indice (${itens.length} itens de /idx/${ns}/)`);
-        if (!itens.length && !peloCatalogo) console.log(`[${painel.sigla}] sem indice e sem catalogo — ${SEM_INDEX}`);
-      }
+      itens = await primeiroQueEntrega(painel, st, o, ns);
     }
     if (!itens || !itens.length) return [];
 
@@ -258,28 +307,39 @@ function criaFonte(painel, opcoes) {
     }
 
     const vistos = new Set();
+    const candidatos = ranked.slice(0, MAX_TENTATIVAS);
+    if (!candidatos.length) return [];
+    if (p.passou() || p.sobra() < 1500) {
+      console.log(`[${painel.sigla}] orcamento de ${TETO_MS / 1000}s estourado antes do detalhe (${ranked.length} candidato(s))`);
+      return [];
+    }
+
+    const detalhes = await Promise.all(
+      candidatos.map(({ item }) =>
+        painelApi
+          .detalheDe(painel, item.i, isTv, restante(p, o.painelMs || TETO_MS))
+          .then((info) => ({ item, info, erro: null }))
+          .catch((e) => ({ item, info: null, erro: e }))
+      )
+    );
+
     const streams = [];
-    let tentativas = 0;
-    for (const { item } of ranked) {
-      // `p.ms()` e o tempo que sobra: um detalhe que estoura o orcamento nao vale a pena
-      // porque o Nuvio conta os 60 s da invocacao inteira, e 16 fontes correm em 120 s.
-      if (streams.length >= MAX_RESULTADOS || tentativas >= MAX_TENTATIVAS) break;
-      if (p.passou() || p.ms() < 1500) {
-        if (!streams.length) console.log(`[${painel.sigla}] orcamento de ${TETO_MS / 1000}s estourado antes do detalhe (${ranked.length} candidato(s))`);
-        break;
+    for (const { item, info, erro } of detalhes) {
+      if (streams.length >= MAX_RESULTADOS) break;
+      if (erro) {
+        console.log(`[${painel.sigla}] ${isTv ? "get_series_info" : "get_vod_info"}(${item.i}) falhou: ${erro && erro.message ? erro.message : erro}`);
+        continue;
       }
-      if (vistos.has(item.i)) continue;
-      tentativas += 1;
+      const qualidade = extractQuality(item.t);
+      const comum = {
+        sigla: painel.sigla,
+        qualidade,
+        idioma: idiomaDe(item.t),
+        titulo: titulos[0],
+        ano
+      };
+      let url = null;
       if (isTv) {
-        let info = null;
-        // O timeout do detalhe e o que sobra do orcamento (nao os 8 s fixos): um painel
-        // que responde em 2,5 s (blz) nao pode roubar o tempo do proximo candidato.
-        try {
-          info = await painelApi.infoDeSerie(painel, item.i, Math.min(p.ms(), o.painelMs || 8e3));
-        } catch (e) {
-          console.log(`[${painel.sigla}] get_series_info(${item.i}) falhou: ${e && e.message ? e.message : e}`);
-          continue;
-        }
         if (!info || !info.episodes) continue;
         const s = Number(season) || 1;
         const ep = painelApi.episodiosDe(info, s, Number(episode) || 1);
@@ -294,39 +354,19 @@ function criaFonte(painel, opcoes) {
           const veio = tmdbDoEpisodio(info, s, Number(episode) || 1);
           if (veio && veio !== esperado.id && veio !== Number(id)) continue;
         }
-        const url = painelApi.urlDoEpisodio(painel, ep.id, ep.container_extension);
-        if (vistos.has(url)) continue;
-        vistos.add(url);
-        const qualidade = extractQuality(item.t);
-        streams.push({
-          name: painel.sigla,
-          title: montaLinha(qualidade, idiomaDe(item.t), painel.sigla),
-          url,
-          ...(qualidade ? { quality: qualidade } : {})
-        });
+        url = painelApi.urlDoEpisodio(painel, ep.id, ep.container_extension);
+        comum.temporada = s;
+        comum.episodio = Number(episode) || 1;
       } else {
-        let info = null;
-        try {
-          info = await painelApi.infoDe(painel, item.i, Math.min(p.ms(), o.painelMs || 8e3));
-        } catch (e) {
-          console.log(`[${painel.sigla}] get_vod_info(${item.i}) falhou: ${e && e.message ? e.message : e}`);
-          continue;
-        }
         if (info && !aceitaTmdb(info, id, titulos, isTv, ano)) continue;
-        const url = painelApi.urlDoFilme(painel, item.i, item.e || (info && info.info && info.info.container_extension));
-        if (vistos.has(url)) continue;
-        vistos.add(url);
-        const qualidade = extractQuality(item.t);
-        streams.push({
-          name: painel.sigla,
-          title: montaLinha(qualidade, idiomaDe(item.t), painel.sigla),
-          url,
-          ...(qualidade ? { quality: qualidade } : {})
-        });
+        url = painelApi.urlDoFilme(painel, item.i, item.e || (info && info.info && info.info.container_extension));
       }
+      if (!url || vistos.has(url)) continue;
+      vistos.add(url);
+      streams.push(apresenta({ ...comum, url }));
     }
-    if (!streams.length && ranked.length) {
-      console.log(`[${painel.sigla}] casou o titulo mas nao devolve link (${ranked.length} candidato(s), ${tentativas} detalhe(s) pedido(s)) — [] de proposito, nunca inventar stream`);
+    if (!streams.length) {
+      console.log(`[${painel.sigla}] casou o titulo mas nao devolve link (${ranked.length} candidato(s), ${candidatos.length} detalhe(s) pedido(s)) — [] de proposito, nunca inventar stream`);
     }
     return streams;
   };

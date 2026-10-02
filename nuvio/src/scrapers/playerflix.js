@@ -1,6 +1,7 @@
 const { pegar, pegarJson } = require("../lib/http");
 const { matchVodTitle } = require("../lib/match");
 const { extractQuality } = require("../lib/quality");
+const { apresenta } = require("../lib/apresentacao");
 const { resolver } = require("../lib/extrator");
 const { UA } = require("../lib/ua");
 const { TETO_CORPO_BYTES } = require("../core/sandbox");
@@ -115,8 +116,16 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
   for (const c of candidatos) {
     if (!await provaDeVida(c.url)) continue;
     const qualidade = extractQuality(c.url);
-    const linha = [qualidade, c.idioma, SIGLA].filter(Boolean).join(" · ");
-    streams.push({ name: SIGLA, title: linha, url: c.url, ...(qualidade ? { quality: qualidade } : {}) });
+    streams.push(apresenta({
+      sigla: SIGLA,
+      url: c.url,
+      qualidade,
+      idioma: c.idioma,
+      titulo: meta.titulos[0],
+      ano: meta.ano,
+      temporada: isTv ? s : null,
+      episodio: isTv ? e : null
+    }));
     if (streams.length >= 25) break;
   }
   return streams;

@@ -3,8 +3,10 @@ const { tituloDe } = require("../lib/tmdb");
 const { matchVodTitle } = require("../lib/match");
 const { normalizeLoose } = require("../lib/text");
 const { extractQuality } = require("../lib/quality");
+const { apresenta } = require("../lib/apresentacao");
 
 const API = "https://api.otakulogia.com/graphql";
+const SIGLA = "SHG";
 const MS = 7000;
 const MARCADOR = /\b(shippu?den|\d(?:st|nd|rd|th)\s+season|season\s*\d|s\d{1,2}\b|temporada\s*\d)/i;
 
@@ -151,13 +153,16 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
     const url = urlDe(ep);
     if (!url || vistos.has(url)) continue;
     vistos.add(url);
-    const idioma = idiomaDe(ep.audioType);
-    const qualidade = extractQuality(ep.title) || extractQuality(url);
-    const partes = [];
-    if (qualidade) partes.push(qualidade);
-    if (idioma) partes.push(idioma);
-    partes.push("SHG");
-    saida.push({ name: "SHG", title: partes.join(" · "), url });
+    saida.push(apresenta({
+      sigla: SIGLA,
+      url,
+      qualidade: extractQuality(ep.title) || extractQuality(url),
+      idioma: idiomaDe(ep.audioType),
+      titulo: info.titulo,
+      ano: info.ano,
+      temporada: serie ? (Number(season) > 0 ? Number(season) : 1) : null,
+      episodio: serie ? (Number(episode) > 0 ? Number(episode) : 1) : null
+    }));
     if (saida.length >= 150) break;
   }
   return saida;

@@ -2,7 +2,8 @@ const { pegarJson, pegarTexto } = require("../lib/http");
 const { de } = require("../lib/canal");
 const { novo } = require("../core/sandbox");
 const { UA } = require("../lib/ua");
-const { sinaliza } = require("../lib/hls");
+const { provaPlaylist: veredito, sinaliza } = require("../lib/hls");
+const { aoVivo: streamDeTv } = require("../lib/apresentacao");
 
 const FONTE = "emb";
 const SIGLA = "EMB";
@@ -10,11 +11,6 @@ const MS = 8e3;
 const TETO_MS = 16e3;
 const CATALOGO = "https://embedtv.lat/api/channels";
 const CHUTE = "https://52d080a3e172c33fd6886a37e7.s23-cloudfront-net.lat/8e8e8b142192ea65/";
-
-function contaSegmentos(texto) {
-  if (!texto.includes("#EXTM3U")) return 0;
-  return texto.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length;
-}
 
 function erroDeRede(e) {
   return /socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|aborted|timeout|fetch failed|network|HTTP 5\d\d/i.test(String((e && e.message) || e));
@@ -29,12 +25,16 @@ async function paginaDoCanal(canalId, p) {
 
 async function provaPlaylist(url, p) {
   const r = await pegarTexto(url, { ms: Math.min(MS, p.ms()), headers: { Range: "bytes=0-4095", "User-Agent": UA } });
-  if (r.status === 404 || r.status === 410 || r.status === 451) return false;
-  if (r.status === 429 || r.status >= 500) throw new Error(`emb playlist HTTP ${r.status} (nao e prova)`);
-  if (!r.ok) return false;
-  if (contaSegmentos(r.texto) > 0) return true;
+  const prova = veredito(r.status, r.texto);
+  if (prova === "viva") return true;
+  if (prova === "indeciso") {
+    console.log(`[EMB] ${url.slice(0, 60)} respondeu HTTP ${r.status} a este IP — o canal entra na lista mesmo assim`);
+    return true;
+  }
+  // "morta": a origem respondeu 2xx e nao ha manifesto nem segmento. Some uma vez
+  // (o Range pode ter cortado a playlist) e desiste.
   const inteiro = await pegarTexto(url, { ms: Math.min(MS, p.ms()), headers: { "User-Agent": UA } });
-  return inteiro.ok && contaSegmentos(inteiro.texto) > 0;
+  return veredito(inteiro.status, inteiro.texto) === "viva";
 }
 
 module.exports.getStreams = async (id, mediaType) => {
@@ -59,7 +59,7 @@ module.exports.getStreams = async (id, mediaType) => {
   if (!candidatos.includes(chute)) candidatos.push(chute);
   for (const url of candidatos) {
     if (p.passou()) break;
-    if (await provaPlaylist(url, p)) return [{ name: SIGLA, title: `☁️ ${canal.nome} · ${SIGLA}`, url: sinaliza(url) }];
+    if (await provaPlaylist(url, p)) return [streamDeTv({ sigla: SIGLA, titulo: canal.nome, url: sinaliza(url) })];
   }
   return [];
 };

@@ -1254,6 +1254,74 @@ ou corpo decodificado) · o 403/235 B de origem que recusa IP de datacenter (ATO
 
 
 
+## Rodada 02/10/2026 (2ª) — o plugin Nuvio: contrato de tela, prazo de corpo e qualidade real
+
+O dono pediu bateria ponta a ponta, velocidade, "100% das fontes sempre pesquisadas e, se achar,
+apareça o player", limpeza e **normalizar o nome das fontes como aparece dentro do Nuvio**.
+Detalhe em [`nuvio/STATUS.md`](nuvio/STATUS.md) §1c. Aqui fica o que muda para quem mexe no repo.
+
+**O Nuvio monta a tela em três lugares, e isso decide o contrato** (`/tmp/nuviotv/app/src/main/java/...`):
+
+| o que aparece | de onde vem |
+|---|---|
+| linha 1 | `name` do scraper + `" - "` + `quality` (o **app** anexa) |
+| linha 2 | `description ?: title`; `description` só existe com `size`/`language` |
+| badge | `addonName` = `name` do **manifesto**, `maxLines = 1` |
+
+**Consequências que valem para o resto do projeto:**
+
+- sem `quality`, o app escreve `stream_quality_unknown` — **"Desconhecido"** em pt-BR. Medido:
+  **13 das 15 fontes** devolviam sem ele.
+- mandar `language`/`size` **esconde** o `title`. Não mandar.
+- com "agrupar por repositório" ligado, o badge das 15 vira só "Mirror" — por isso a sigla vai
+  no **fim do `title`** além do badge.
+- `LocalScraperResult` é data class do Moshi: **campo a mais pode quebrar o parse em runtime**.
+  O conjunto aceito é fechado e travado em `test/nuvio-apresentacao.test.js`.
+
+**`src/lib/apresentacao.js`** é o único lugar que monta o objeto de stream (as 15 fontes passam
+por ele). `sigla` vem do próprio scraper porque `core/fontes.js` é tooling-only.
+
+**`src/lib/http.js` — o prazo cobre headers E corpo.** O defeito mais geral da rodada:
+`Promise.race([fetch, estouro])` termina quando os headers chegam e limpava o relógio no
+`finally`, então o `res.text()` ficava sem limite. Medido no DGO: headers 0,23 s, corpo 15,1 s.
+Corrigido: **DGO 21,3 s → 5,7 s**. O `abort` do fetch é traduzido para `timeout de Xms em <url>`.
+
+**`src/lib/painel.js`** — direto e reserva (worker) em **paralelo escalonado em 2,5 s**.
+`get_vod_info`: BLZ 20,0 s · SPC 0,05 s · ATO não responde deste IP. ATO **9,9 s → 4,1 s**.
+Detalhe dos candidatos em paralelo (`CONC_DETALHE`) — em sequência seriam 60 s no BLZ.
+**O relógio nunca é limpo antes do `await` da outra ponta** (limpar deixava a reserva esperando
+um timer morto e o `await` não voltava nunca).
+
+**`src/lib/fonte-painel.js`** — o catálogo gzip parou de **roubar o orçamento**: era
+`await catalogo` e **depois** `await shard`, e o BLZ gastava 12 s de 15 s num catálogo que nem
+responde, sobrava 2,9 s para o detalhe que leva 20 s, e devolvia `[]`. Agora é **corrida**.
+
+**`src/lib/qualifica.js` + `src/lib/video-probe.js`** — a qualidade é a **resolução real lida do
+vídeo** (160 KB, prazo 3 s). Três defeitos da porta, todos medidos: `ms` `undefined` engolido
+pelo `catch` (null em 1 ms), `#EXT-X-MAP` do fMP4 ignorado (é onde a resolução está), e teto
+por requisição em vez do prazo da sonda (12,2 s no DGO). A build embrulha os 15 `getStreams`
+(`entradaDe()`), então não há como uma fonte esquecer. `MIRROR_QUALIDADE=nunca` desliga.
+**Não se propaga** a resolução de um stream para os outros da fonte — seria inventar.
+
+**`src/lib/hls.js`** — `provaPlaylist()` é a régua única das 4 fontes de TV: **descarta**
+404/410/451 e 2xx sem segmento; **não descarta** 403/429/5xx/timeout/rede. Medido no RCD: a
+cadeia resolve e entrega `index.m3u8?token=…`, mas o CDN responde **403 a este IP** — e o
+vídeo é baixado pelo aparelho, do IP residencial dele. **RCD: 0 → 1 stream.**
+`tools/provar-links.js` segue a mesma régua (`INDECISO`/`BLOQUEADO` ≠ `MORTO`).
+
+**`tools/bateria-completa.js`** é a bateria do pedido: 15 fontes × N casos, medindo tempo,
+entrega, contrato, qualidade e link vivo — e separando **"o canal não existe nesta fonte"** de
+**"a fonte tem e não entregou"**.
+
+```
+casos: 19 | canal nao existe nesta fonte: 3 | tentados: 16
+com stream: 16/16 | lancou erro: 0 | devolveu vazio: 0
+```
+
+**Armadilha do ambiente:** o `node` daqui rejeita `const { x as y }`. Use `:`.
+
+---
+
 ## Pendências conhecidas (25/09/2026 — rodada 33 aplicada)
 
 **Aplicado nesta rodada (tudo medido, sem regressão):**

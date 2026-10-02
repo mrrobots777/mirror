@@ -87,8 +87,32 @@ test("sinaliza nos pontos de saida dos 4 (e so la)", () => {
     const src = fonte(nome);
     assert.match(src, /url:\s*sinaliza\(/, `${nome}: o url do stream nao passa pelo sinaliza`);
   }
-  // E o import nao pode faltar onde ha saida.
-  assert.match(fonte("reidoscanais.js"), /const \{ sinaliza \} = require\("\.\.\/lib\/hls"\);/);
+  // E o import nao pode faltar onde ha saida. O `require` hoje tambem traz
+  // `provaPlaylist` (a regua de "a origem recusou ESTE IP, nao o canal"), entao a
+  // assercao olha o NOME importado e nao a linha inteira.
+  for (const nome of ["reidosembeds.js", "embedtv.js", "embedcanais.js", "reidoscanais.js"]) {
+    const src = fonte(nome);
+    assert.match(
+      src,
+      /const \{[^}]*\bsinaliza\b[^}]*\} = require\("\.\.\/lib\/hls"\);/,
+      `${nome}: importou sinaliza de outro jeito (ou nao importou)`
+    );
+  }
+});
+
+test("as 4 fontes de TV usam a MESMA prova de playlist (uma regra so)", () => {
+  // Antes cada uma tinha o seu `contaSegmentos` e o seu tratamento de 403/429/5xx,
+  // e as quatro divergiam. A regra unica esta em `lib/hls.js`.
+  for (const nome of ["reidosembeds.js", "embedtv.js", "embedcanais.js", "reidoscanais.js"]) {
+    const src = fonte(nome);
+    assert.match(src, /provaPlaylist/, `${nome}: nao usa a prova de playlist compartilhada`);
+    assert.ok(
+      !/function contaSegmentos\(/.test(src),
+      `${nome}: ainda tem a contaSegmentos propria (duplicada)`
+    );
+  }
+  const hls = fs.readFileSync(path.join(RAIZ, "lib", "hls.js"), "utf8");
+  assert.match(hls, /403|indeciso/, "a regra precisa cobrir o 403 de IP de datacenter");
 });
 
 // ---------------------------------------------------------------------------
@@ -171,8 +195,12 @@ test("REI: playlist viva vira stream com o formato sinalizado na URL", async () 
     const rei = require("../nuvio/src/scrapers/reidosembeds");
     const lista = await rei.getStreams("1140", "channel", null, null);
     assert.strictEqual(lista.length, 1, "a cadeia resolveu e a playlist tem segmento");
-    assert.strictEqual(lista[0].name, "REI");
-    assert.match(lista[0].title, /HBO/, "o titulo vem do canal do catalogo");
+    // Contrato do app (ver `nuvio/src/lib/apresentacao.js`): a linha 1 e o QUE E —
+    // o nome do canal, com o emoji — e o app acrescenta " - Ao Vivo" sozinho porque
+    // `quality` vem preenchido. A fonte (REI) e' a linha 2 e o badge do manifesto.
+    assert.strictEqual(lista[0].name, "📺 HBO");
+    assert.strictEqual(lista[0].quality, "Ao Vivo");
+    assert.strictEqual(lista[0].title, "REI");
     // O caminho termina em `.txt` com `content-type: text/plain` — sem o aviso o Nuvio
     // trata o manifesto como arquivo progressivo (medido em tools/mime.js).
     assert.strictEqual(lista[0].url, "https://cdn.test/live.txt?format=m3u8");

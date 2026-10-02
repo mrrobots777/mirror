@@ -6,6 +6,7 @@ const { extractQuality } = require("../lib/quality");
 const { ascii, words, looseCoverage, extraWords, decodeEntities } = require("../lib/text");
 const { resolver } = require("../lib/extrator");
 const { UA } = require("../lib/ua");
+const { apresenta } = require("../lib/apresentacao");
 
 const BASE = "https://www.anitube.biz";
 const API = `${BASE}/wp-json/wp/v2`;
@@ -315,14 +316,17 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
     if (vistos.has(cand.url)) continue;
     if (!await provaDeVida(cand.url, { Referer: `${BASE}/` })) continue;
     vistos.add(cand.url);
-    const nome = semEpisodio(post.title.rendered) || info.titulo;
     const idioma = dublado ? "Dublado" : "Legendado";
-    saida.push({
-      name: SIGLA,
-      title: [`${nome} · S${String(temporada).padStart(2, "0")}E${String(numero).padStart(2, "0")}`, idioma, SIGLA].filter(Boolean).join(" · "),
+    saida.push(apresenta({
+      sigla: SIGLA,
       url: cand.url,
+      titulo: info.titulo,
+      ano: info.ano,
+      temporada,
+      episodio: numero,
+      idioma,
       headers: { "User-Agent": UA }
-    });
+    }));
     if (saida.length >= 4) break;
   }
 

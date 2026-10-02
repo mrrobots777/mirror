@@ -5,6 +5,7 @@ const { matchVodTitle, bonusTemporada, PEN_SHIPPUDEN_PADRAO, PEN_SHIPPUDEN_ALT, 
 const { extractQuality, normalizeQuality } = require("../lib/quality");
 const { decodeEntities, normalizeLoose, lower } = require("../lib/text");
 const { UA } = require("../lib/ua");
+const { apresenta } = require("../lib/apresentacao");
 
 const BASE = "https://animesonline.io";
 const API = `${BASE}/wp-json/wp/v2`;
@@ -447,14 +448,17 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
   }
 
   if (!saida.length && erro) throw erro;
-  return saida.map((s) => {
-    const idioma = s.dublado ? "Dublado" : "Legendado";
-    return {
-      name: SIGLA,
-      title: [s.qualidade, idioma, SIGLA].filter(Boolean).join(" · "),
+  return saida.map((s) =>
+    apresenta({
+      sigla: SIGLA,
       url: s.url,
-      ...(s.qualidade ? { quality: s.qualidade } : {}),
+      qualidade: s.qualidade,
+      idioma: s.dublado ? "Dublado" : "Legendado",
+      titulo: info.titulo,
+      ano: info.ano,
+      temporada,
+      episodio: numero,
       headers: { "User-Agent": UA }
-    };
-  });
+    })
+  );
 };

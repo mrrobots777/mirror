@@ -1,6 +1,7 @@
 const { pegar, pegarJson } = require("../lib/http");
 const { matchVodTitle } = require("../lib/match");
 const { extractQuality } = require("../lib/quality");
+const { apresenta } = require("../lib/apresentacao");
 const { UA } = require("../lib/ua");
 const { TETO_CORPO_BYTES } = require("../core/sandbox");
 
@@ -47,15 +48,36 @@ async function drena(resposta) {
   }
 }
 
+// PROVA DE VIDA — o que pode condenar o link e o que nao pode.
+//
+// MEDIDO 02/10/2026: a origem do VZR responde `302` para um CDN assinado
+// (`cdn99xn----booster.anipixel.best`) e esse CDN responde `429 text/html` para o
+// IP de datacenter deste servidor. A versao anterior seguia o redirect, via o
+// `content-type`, e condemned um stream que estava VIVO — e por isso o VZR
+// devolvia `[]` para Matrix. Regra do proprio projeto (decisao 131/134): "nao deu
+// para saber" nunca vira "morreu". Entao:
+//
+//   - 3xx SEM seguir o redirect e PROVA DE VIDA: existe CDN assinado esperando.
+//   - 429 NUNDA condena: e limite de taxa, o link continua valendo.
+//   - timeout/rede NUNCA condena (link lento ainda funciona).
+//   - 400/404/410/451, 403, 5xx e `text/plain` SIM: a origem respondeu que nao ha
+//     video, e `text/plain` e o corpo que o addon ja documentou para "conteudo
+//     ausente" nesta fonte.
 async function provaDeVida(url) {
   let r = null;
   try {
-    r = await pegar(url, { ms: 7e3, headers: { Range: "bytes=0-2047", Referer: REFERER, "User-Agent": UA } });
+    r = await pegar(url, {
+      ms: 7e3,
+      redirect: "manual",
+      headers: { Range: "bytes=0-2047", "User-Agent": UA }
+    });
   } catch (_) {
     return true;
   }
+  if (r.status >= 300 && r.status < 400) return true;
   const tipo = String(r.headers.get("content-type") || "").toLowerCase();
   await drena(r);
+  if (r.status === 429 || r.status === 408) return true;
   if (r.status === 400 || r.status === 404 || r.status === 410 || r.status === 451) return false;
   if (r.status === 403 || r.status >= 500) return false;
   if (tipo.includes("text/plain") || tipo.includes("text/html")) return false;
@@ -91,11 +113,17 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
   if (!/^https?:\/\//i.test(String(dados.url))) return [];
   if (!await provaDeVida(dados.url)) return [];
   const qualidade = extractQuality(dados.url) || extractQuality(dados.quality || "");
-  return [{
-    name: SIGLA,
-    title: [qualidade, SIGLA].filter(Boolean).join(" · "),
+  return [apresenta({
+    sigla: SIGLA,
     url: dados.url,
-    ...(qualidade ? { quality: qualidade } : {}),
-    headers: { Referer: REFERER, "User-Agent": UA }
-  }];
+    qualidade,
+    titulo: (meta && meta.titulos[0]) || dados.title,
+    ano: meta && meta.ano,
+    temporada: isTv ? s : null,
+    episodio: isTv ? e : null,
+    // MEDIDO tambem no addon: o `nixplay` recusa qualquer valor de Referer e aceita
+    // ausente ou vazio. Como o Nuvio so manda cabecalho quando o scraper declara, o
+    // valor e declarado explicitamente vazio em vez de omitido.
+    headers: { Referer: "" }
+  })];
 };

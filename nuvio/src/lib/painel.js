@@ -1,7 +1,9 @@
 const { pegar } = require("./http");
 const { UA } = require("./ua");
 
-const MS_PADRAO = 8e3;
+// Teto de UMA chamada ao painel. MEDIDO: BLZ `get_vod_info` leva 20 s (duas
+// rodadas: 20,05 s e 19,94 s), SPC 0,05 s. Com 8 s o BLZ nunca entregava.
+const MS_PADRAO = 26e3;
 
 // MEDIDO 02/10/2026: o painel ATO recusa IP de datacenter — `player_api.php` responde
 // `200` com a pagina "Welcome to nginx!" de 235 B (direto) e o MESMO pedido pelo worker
@@ -70,20 +72,93 @@ async function le(url, ms, sigla) {
   }
 }
 
+// MEDIDO 02/10/2026: `get_vod_info` do BLZ responde em 20 s, o do SPC em 0,05 s e o
+// do ATO nao responde direto deste IP (curl: 30 s sem resposta) — so pela reserva.
+//
+// A versao anterior pagava o timeout INTEIRO do pedido direto antes de tentar a
+// reserva, e a fonte levava 9,8 s para entregar 2 streams. A versao de agora põe
+// os dois EM PARALELO, com a reserva escalonada: a origem que responde rapido
+// (SPC, 0,05 s) ganha sem gastar uma chamada no worker, e a origem que trava
+// (ATO) nao espera o timeout inteiro — a reserva entra depois de MS_ESCALONA e
+// responde em ~1 s, entao a fonte volta a ~3,5 s.
+//
+// O relogio NUNCA e limpo antes do `await` da outra ponta: limpar deixaria a
+// reserva esperando um timer que ja nao existe, e o `await` nao voltaria nunca.
+// Ele so e limpo quando ninguem mais precisa da outra ponta.
+//
+// `le` pode RECUSAR (timeout/rede), e uma recusa do direto nao pode derrubar a
+// reserva — por isso as duas pontas viram resultado em vez de excecao, e so no fim
+// (nenhuma das duas entregou) o erro sobe.
+const MS_ESCALONA = 2.5e3;
+
+function semEstouro(p, de) {
+  return Promise.resolve(p).then(
+    (r) => ({ r, de }),
+    (e) => ({ r: { situacao: "recusa", motivo: `${de}: ${e && e.message ? e.message : e}` }, de })
+  );
+}
+
+function entregou(r) {
+  return r.situacao === "ok";
+}
+
+function naoExiste(r) {
+  return r.situacao === "nao-existe" || r.situacao === "vazio";
+}
+
 async function api(painel, params, ms) {
   const url = urlApi(painel, params);
   const teto = Math.min(Number(ms) || MS_PADRAO, MS_PADRAO);
   const sigla = String(painel.sigla || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const reserva = urlProxiada(painel.sigla, url);
-  const direto = recusaram.has(sigla) ? { situacao: "recusa", motivo: null } : await le(url, teto, painel.sigla);
-  if (direto.situacao === "ok") return direto.json;
-  if (direto.situacao === "nao-existe" || direto.situacao === "vazio") return null;
-  if (direto.situacao === "cortado" || !reserva) throw new Error(direto.motivo);
-  if (direto.refuga) recusaram.add(sigla);
-  const reservaR = await le(reserva, teto, painel.sigla);
-  if (reservaR.situacao === "ok") return reservaR.json;
-  if (reservaR.situacao === "nao-existe" || reservaR.situacao === "vazio") return null;
-  throw new Error(direto.motivo || reservaR.motivo);
+
+  // Origem que ja recusou com pagina de erro vai direto pela reserva.
+  if (recusaram.has(sigla) && reserva) return soReserva(reserva, teto, painel.sigla);
+  if (!reserva) return soDireto(url, teto, painel.sigla);
+
+  const direto = semEstouro(le(url, teto, painel.sigla), "direto");
+  let relogio = null;
+  const escalona = new Promise((resolve) => {
+    relogio = setTimeout(resolve, Math.min(MS_ESCALONA, teto));
+  });
+  const pelaReserva = semEstouro(escalona.then(() => le(reserva, teto, painel.sigla)), "reserva");
+
+  const primeiro = await Promise.race([direto, pelaReserva]);
+  if (entregou(primeiro.r)) {
+    clearTimeout(relogio);
+    return primeiro.r.json;
+  }
+  if (naoExiste(primeiro.r)) {
+    clearTimeout(relogio);
+    return null;
+  }
+  if (primeiro.r.refuga) recusaram.add(sigla);
+
+  // O vencedor nao entregou: espera a outra ponta, que sempre resolve porque o
+  // relogio continua rodando.
+  const outra = primeiro.de === "direto" ? await pelaReserva : await direto;
+  clearTimeout(relogio);
+  if (entregou(outra.r)) return outra.r.json;
+  if (primeiro.r.refuga && outra.de === "direto") recusaram.add(sigla);
+  if (naoExiste(outra.r) || naoExiste(primeiro.r)) return null;
+  if (primeiro.r.situacao === "cortado" || outra.r.situacao === "cortado") {
+    throw new Error((primeiro.r.motivo || "") + " | " + (outra.r.motivo || ""));
+  }
+  throw new Error(primeiro.r.motivo || outra.r.motivo);
+}
+
+async function soDireto(url, teto, sigla) {
+  const r = await le(url, teto, sigla);
+  if (entregou(r)) return r.json;
+  if (naoExiste(r)) return null;
+  throw new Error(r.motivo);
+}
+
+async function soReserva(url, teto, sigla) {
+  const r = await le(url, teto, sigla);
+  if (entregou(r)) return r.json;
+  if (naoExiste(r)) return null;
+  throw new Error(r.motivo);
 }
 
 
@@ -93,6 +168,12 @@ function infoDe(painel, id, ms) {
 
 function infoDeSerie(painel, id, ms) {
   return api(painel, { action: "get_series_info", series_id: id }, ms);
+}
+
+// Escolhe a acao pelo tipo do conteudo. `fonte-painel` chama as duas por um caminho
+// so, porque os detalhes sao pedidos EM PARALELO (ver CONC_DETALHE).
+function detalheDe(painel, id, isTv, ms) {
+  return isTv ? infoDeSerie(painel, id, ms) : infoDe(painel, id, ms);
 }
 
 function tmdbDe(info) {
@@ -135,6 +216,7 @@ module.exports = {
   api,
   baseDe,
   credencial,
+  detalheDe,
   episodiosDe,
   infoDe,
   infoDeSerie,

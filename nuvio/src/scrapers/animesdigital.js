@@ -4,6 +4,7 @@ const { tituloDe } = require("../lib/tmdb");
 const { bonusTemporada, PEN_SHIPPUDEN_PADRAO, PEN_SHIPPUDEN_ALT, PEN_BORUTO, PEN_FINAL_SEASON, PEN_FILME, PEN_HEN } = require("../lib/match");
 const { resolver } = require("../lib/extrator");
 const { extractQuality } = require("../lib/quality");
+const { apresenta } = require("../lib/apresentacao");
 const { decodeEntities, normalizeLoose, lower } = require("../lib/text");
 const { UA } = require("../lib/ua");
 
@@ -263,13 +264,17 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
       if (!await provaDeVida(url)) continue;
       vistos.add(url);
       const qualidade = extractQuality(url);
-      saida.push({
-        name: SIGLA,
-        title: [qualidade, idiomaDe(cand.titulo), SIGLA].filter(Boolean).join(" · "),
+      saida.push(apresenta({
+        sigla: SIGLA,
         url,
-        ...(qualidade ? { quality: qualidade } : {}),
+        qualidade,
+        idioma: idiomaDe(cand.titulo),
+        titulo: info.titulo,
+        ano: info.ano,
+        temporada,
+        episodio: numero,
         headers: { "User-Agent": UA }
-      });
+      }));
       if (saida.length >= 10) break;
     } catch (e) {
       if (!falha) falha = e;

@@ -1,5 +1,7 @@
 const { pegar, pegarJson } = require("../lib/http");
 const { extractQuality } = require("../lib/quality");
+const { apresenta } = require("../lib/apresentacao");
+const { tituloDe } = require("../lib/tmdb");
 const { UA } = require("../lib/ua");
 const { TETO_CORPO_BYTES } = require("../core/sandbox");
 
@@ -77,6 +79,15 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
   if (!r.ok || !r.dados) throw new Error(`rtd HTTP ${r.status || "?"} em play-link`);
   const dados = r.dados;
   if (dados.missing) return [];
+  // O titulo canonico vem do TMDB (memoizado). E o que faz a linha 1 dizer o QUE E
+  // em vez da sigla. O RTD nao depende do TMDB para funcionar, entao a falta da
+  // chave nao pode derrubar a fonte: sem titulo, a linha 1 cai para a sigla.
+  let info = null;
+  try {
+    info = await tituloDe(id, isTv ? "tv" : "movie", isTv ? s : null, isTv ? e : null);
+  } catch (_) {
+    info = null;
+  }
   if (dados.error) throw new Error(`rtd recusou: ${String(dados.error).slice(0, 40)}`);
   if (dados.contract !== void 0 && Number(dados.contract) !== CONTRATO) return [];
   if (dados.type && (isTv ? "tv" : "movie") !== String(dados.type)) return [];
@@ -92,13 +103,17 @@ module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
     const idioma = legendado ? "Legendado" : "Dublado";
     const qualidade = extractQuality(url) || extractQuality(rotulo);
     if (!await provaDeVida(url)) continue;
-    streams.push({
-      name: SIGLA,
-      title: [qualidade, idioma, SIGLA].filter(Boolean).join(" · "),
+    streams.push(apresenta({
+      sigla: SIGLA,
       url,
-      ...(qualidade ? { quality: qualidade } : {}),
+      qualidade,
+      idioma,
+      titulo: (info && info.titulo) || dados.title,
+      ano: info && info.ano,
+      temporada: isTv ? s : null,
+      episodio: isTv ? e : null,
       headers: { Referer: REFERER, "User-Agent": UA }
-    });
+    }));
     if (streams.length >= 25) break;
   }
   return streams;

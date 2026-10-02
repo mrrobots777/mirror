@@ -2,7 +2,8 @@ const { pegar, pegarTexto } = require("../lib/http");
 const { de } = require("../lib/canal");
 const { novo } = require("../core/sandbox");
 const { UA } = require("../lib/ua");
-const { sinaliza } = require("../lib/hls");
+const { provaPlaylist, sinaliza } = require("../lib/hls");
+const { aoVivo: streamDeTv } = require("../lib/apresentacao");
 
 const FONTE = "etc";
 const SIGLA = "ETC";
@@ -19,11 +20,6 @@ const CDNS = [
 
 function semAcento(s) {
   return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-}
-
-function contaSegmentos(texto) {
-  if (!texto.includes("#EXTM3U")) return 0;
-  return texto.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length;
 }
 
 function erroDeRede(e) {
@@ -71,9 +67,9 @@ function origemDe(url) {
 async function testaPlaylist(url, p, refererPreferido) {
   const origem = String(refererPreferido || origemDe(url) || LISTA);
   const r = await pegarTexto(url, { ms: Math.min(MS, p.ms()), headers: { Referer: origem, "User-Agent": UA } });
-  if (r.status === 403 || r.status === 404 || r.status === 410 || r.status === 451) return null;
-  if (r.status === 429 || r.status >= 500) throw new Error(`etc playlist HTTP ${r.status} (nao e prova)`);
-  if (!r.ok || contaSegmentos(r.texto) < 1) return null;
+  const prova = provaPlaylist(r.status, r.texto);
+  if (prova === "morta") return null;
+  if (prova === "indeciso") console.log(`[ETC] ${String(r.url || url).slice(0, 60)} respondeu HTTP ${r.status} a este IP — o canal entra na lista mesmo assim`);
   return { url: String(r.url || url), referer: origem };
 }
 
@@ -92,7 +88,12 @@ module.exports.getStreams = async (id, mediaType) => {
         if (m) {
           const prova = await testaPlaylist(m[0], p, origemDe(pg.url));
           if (prova) {
-            return [{ name: SIGLA, title: `☁️ ${canal.nome} · ${SIGLA}`, url: sinaliza(prova.url), headers: { Referer: prova.referer, "User-Agent": UA } }];
+            return [streamDeTv({
+              sigla: SIGLA,
+              titulo: canal.nome,
+              url: sinaliza(prova.url),
+              headers: { Referer: prova.referer, "User-Agent": UA }
+            })];
           }
         }
       }
@@ -106,7 +107,12 @@ module.exports.getStreams = async (id, mediaType) => {
     const entrada = `${cdn}/${canal.slug}.m3u8`;
     const prova = await testaPlaylist(entrada, p, origemDe(referer));
     if (!prova) continue;
-    return [{ name: SIGLA, title: `☁️ ${canal.nome} · ${SIGLA}`, url: sinaliza(prova.url), headers: { Referer: prova.referer, "User-Agent": UA } }];
+    return [streamDeTv({
+      sigla: SIGLA,
+      titulo: canal.nome,
+      url: sinaliza(prova.url),
+      headers: { Referer: prova.referer, "User-Agent": UA }
+    })];
   }
   if (rede && !p.passou()) throw rede;
   return [];

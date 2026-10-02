@@ -49,12 +49,14 @@ jobs:
         run: node --test test/
 
       - name: confere que nenhum teste foi removido
-        # A barreira subiu a cada decisao (191 -> 193 -> 198 -> 201 -> 202 -> 204 -> 224 -> 225 -> 232). Um teste que
+        # A barreira subiu a cada decisao (191 -> 193 -> 198 -> 201 -> 202 -> 204 -> 224 -> 225 -> 232 -> 259). Um teste que
         # "sumiu" para a build passar e o jeito mais facil de perder regra sem ninguem ver.
+        # 02/10/2026: 259 -> 285 (+18 do contrato de apresentacao do plugin e +7 do
+        # prazo de corpo do `http.js`; +1 do teste que ficou mais granular).
         run: |
           total=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
           echo "testes: $total"
-          if [ "$total" -lt 254 ]; then
-            echo "a barra de testes caiu (esperado 254 ou mais)"
+          if [ "$total" -lt 285 ]; then
+            echo "a barra de testes caiu (esperado 285 ou mais)"
             exit 1
           fi

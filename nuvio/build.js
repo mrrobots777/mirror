@@ -105,12 +105,35 @@ function tetoDoIndice() {
   }
 }
 
+// Cada scraper entra no bundle por um embrulho GERADO aqui, e nao pelo arquivo de
+// `src/scrapers/` direto. O embrulho e o que roda a fonte e depois completa a
+// qualidade dos streams que sairam sem ela (`src/lib/qualifica.js`).
+//
+// Por que no build e nao em cada scraper: sao 15 fontes, e "lembrar de chamar a
+// qualifica" e exatamente o tipo de coisa que se esquece na 16a. Aqui nao ha como
+// esquecer — a lista de entradas deste arquivo ja passa pelo embrulho.
+function entradaDe(chave) {
+  const base = path.join("..", "src", "scrapers", fontes.arquivoDe(chave));
+  const corpo = [
+    'const base = require("' + base.replace(/\\/g, "/") + '");',
+    'const { qualifica } = require("../src/lib/qualifica");',
+    "module.exports = Object.assign({}, base, {",
+    "  getStreams: (...args) => qualifica(base.getStreams, ...args)",
+    "});"
+  ].join("\n");
+  const dir = path.join(raiz, ".build");
+  fs.mkdirSync(dir, { recursive: true });
+  const arquivo = path.join(dir, `${chave}.js`);
+  fs.writeFileSync(arquivo, corpo);
+  return arquivo;
+}
+
 async function main() {
   confereRegistro();
   const manifest = confereManifesto(fontes.manifesto());
 
   const entradas = {};
-  for (const chave of fontes.chaves()) entradas[chave] = arquivoDe(chave);
+  for (const chave of fontes.chaves()) entradas[chave] = entradaDe(chave);
 
   const saida = path.join(raiz, "dist");
   fs.mkdirSync(saida, { recursive: true });
@@ -131,6 +154,7 @@ async function main() {
   const removidos = apagaFora(saida, esperado);
   const corpo = `${JSON.stringify(manifest, null, 2)}\n`;
   fs.writeFileSync(path.join(saida, "manifest.json"), corpo);
+  fs.rmSync(path.join(raiz, ".build"), { recursive: true, force: true });
 
   // `public/` e a raiz que vai para o GitHub Pages: tem que servir o manifest, os
   // `<fonte>.js` E o `idx/` (indice estatico de blz/spc/ato) no mesmo endereco, porque o

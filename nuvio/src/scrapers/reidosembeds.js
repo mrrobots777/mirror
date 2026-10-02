@@ -2,7 +2,8 @@ const { pegarTexto } = require("../lib/http");
 const { de } = require("../lib/canal");
 const { novo } = require("../core/sandbox");
 const { UA } = require("../lib/ua");
-const { sinaliza } = require("../lib/hls");
+const { provaPlaylist, sinaliza } = require("../lib/hls");
+const { aoVivo: streamDeTv } = require("../lib/apresentacao");
 
 const FONTE = "rei";
 const SIGLA = "REI";
@@ -11,11 +12,6 @@ const MS_PLAYLIST = 13e3;
 const TETO_MS = 20e3;
 const JOGO = "https://v2.rdembed.sbs/";
 const PLAY = "https://reidosembeds.online/";
-
-function contaSegmentos(texto) {
-  if (!texto.includes("#EXTM3U")) return 0;
-  return texto.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length;
-}
 
 function erroDeRede(e) {
   return /socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|aborted|timeout|fetch failed|network|HTTP 5\d\d|ref HTTP 404/i.test(String((e && e.message) || e));
@@ -95,9 +91,11 @@ async function resolveSrc(slug, p) {
 
 async function temSegmentos(src, referer, p) {
   const r = await pegarTexto(src, { ms: restante(p, MS_PLAYLIST), headers: { Referer: referer, "User-Agent": UA } });
-  if (r.status === 429 || r.status >= 500) throw new Error(`rei playlist HTTP ${r.status} (nao e prova)`);
-  if (!r.ok) return false;
-  return contaSegmentos(r.texto) > 0;
+  const prova = provaPlaylist(r.status, r.texto);
+  if (prova === "indeciso") {
+    console.log(`[REI] ${src.slice(0, 60)} respondeu HTTP ${r.status} a este IP — o canal entra na lista mesmo assim`);
+  }
+  return prova !== "morta";
 }
 
 module.exports.getStreams = async (id, mediaType) => {
@@ -113,13 +111,13 @@ module.exports.getStreams = async (id, mediaType) => {
     return [];
   }
   if (await temSegmentos(primeiro.src, primeiro.referer, p)) {
-    return [{ name: SIGLA, title: `📺 ${canal.nome} · ${SIGLA}`, url: sinaliza(primeiro.src) }];
+    return [streamDeTv({ sigla: SIGLA, titulo: canal.nome, url: sinaliza(primeiro.src) })];
   }
   if (p.limite - Date.now() < MS_PLAYLIST) return [];
   try {
     const outro = await resolveSrc(canal.slug, p);
     if (outro.src && (await temSegmentos(outro.src, outro.referer, p))) {
-      return [{ name: SIGLA, title: `📺 ${canal.nome} · ${SIGLA}`, url: sinaliza(outro.src) }];
+      return [streamDeTv({ sigla: SIGLA, titulo: canal.nome, url: sinaliza(outro.src) })];
     }
   } catch (e) {
     return [];
