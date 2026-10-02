@@ -84,6 +84,38 @@ test("a CI conhece os tres produtos", () => {
   );
 });
 
+test("nenhum teste le `node_modules/` num caminho so valido na maquina de quem escreveu", () => {
+  // MEDIDO 02/10/2026: `mirrorview/test/rotas-stream.test.js` lia
+  // `<raiz>/node_modules/stremio-addon-sdk/src/builder.js`. Passava AQUI (instalacao antiga na
+  // raiz) e quebrava na CI, onde o `npm ci` roda POR PRODUTO, em `mirrorstream/node_modules`.
+  // O `test/pastas.test.js` ja caça caminho ABSOLUTO; este caça o parente — `node_modules` na
+  // raiz e' lixo de desenvolvimento, e um teste que depende dele esta Pilhando a maquina de
+  // quem roda, nao o codigo.
+  const achados = [];
+  for (const pasta of ["test", "mirrorstream/test", "mirrorview/test"]) {
+    const dir = path.join(RAIZ, pasta);
+    if (!fs.existsSync(dir)) continue;
+    for (const nome of fs.readdirSync(dir)) {
+      if (!nome.endsWith(".js")) continue;
+      const arquivo = path.join(dir, nome);
+      const linhas = fs.readFileSync(arquivo, "utf8").split("\n");
+      linhas.forEach((linha, i) => {
+        if (/^\s*(\/\/|\*)/.test(linha)) return;
+        // so na raiz do repo: `mirrorstream/node_modules` e' onde a CI instala, e e' valido
+        const naRaiz = /path\.join\(RAIZ,\s*"\.\/?node_modules/.test(linha) ||
+          /path\.join\(__dirname,\s*"\.\.",\s*"\.\.",\s*"node_modules/.test(linha);
+        if (naRaiz) achados.push(`${pasta}/${nome}:${i + 1}  ${linha.trim().slice(0, 80)}`);
+      });
+    }
+  }
+  assert.deepStrictEqual(
+    achados,
+    [],
+    `node_modules da raiz: a CI instala por produto (mirrorstream/node_modules). ` +
+      `Procure em varias pastas e faca o teste pular se nao achar:\n    ${achados.join("\n    ")}`
+  );
+});
+
 test("o .dockerignore nao vaza o node_modules do plugin nem o mirrorview", () => {
   const di = fs.readFileSync(path.join(RAIZ, ".dockerignore"), "utf8").split("\n");
   assert.ok(di.includes("**/node_modules"), "node_modules de um produto entraria na imagem de outro");

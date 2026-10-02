@@ -118,10 +118,28 @@ test("`stream` e' obrigatorio em `resources` porque o handler existe — e a SDK
 
   // E a regra da SDK precisa continuar valendo: se algum dia ela deixar de exigir, este
   // teste avisa, porque a decisao muda de forma.
-  const builder = fs.readFileSync(
-    path.join(RAIZ, "node_modules", "stremio-addon-sdk", "src", "builder.js"),
-    "utf8"
+  //
+  // O SDK e' procurado em VARIOS lugares de proposito. A primeira versao lia
+  // `<raiz>/node_modules/stremio-addon-sdk/src/builder.js`, que existe na minha maquina (uma
+  // instalacao antiga) e NAO existe na CI — onde o `npm ci` roda por produto, em
+  // `mirrorstream/node_modules`. O teste passava aqui e quebrava la: a mesma classe de defeito
+  // que o `test/workflows.test.js` procura (caminho que so existe na maquina de quem
+  // escreveu), so que desta vez em vez de um caminho ABSOLUTO foi um caminho RELATIVO que
+  // dependia de um `node_modules` orfao.
+  const candidatos = [
+    "mirrorstream/node_modules/stremio-addon-sdk/src/builder.js",
+    "mirrorview/node_modules/stremio-addon-sdk/src/builder.js",
+    "node_modules/stremio-addon-sdk/src/builder.js"
+  ];
+  const achado = candidatos.map((c) => path.join(RAIZ, c)).find((p) => fs.existsSync(p));
+
+  assert.ok(
+    achado,
+    `o SDK nao foi encontrado em nenhum destes lugares: ${candidatos.join(", ")} — ` +
+      "sem ele este teste nao consegue confirmar que a regra continua valendo"
   );
+
+  const builder = fs.readFileSync(achado, "utf8");
   assert.ok(
     builder.includes("manifest.resources does not contain"),
     "a SDK mudou: `resources` sem handler definido talvez agora seja permitido, e a decisao 155 precisa ser revista"
