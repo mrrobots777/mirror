@@ -6,20 +6,3 @@ node_modules
 *.md
 test/
 **/test/
-scripts/
-.opencode/
-Dockerfile
-.dockerignore
-plugin/
-
-# `mirrorview/` NAO pode ser excluido, e' contra-intuitivo. MEDIDO 02/10/2026: eu o tinha
-# posto aqui para o MirrorStream nao carregar o codigo de TV, e o efeito colateral foi que
-# `docker build -f mirrorview/Dockerfile .` (contexto = RAIZ, que e' como o `mirrorview/README.md`
-# manda construir) passou a ter contexto INCOMPLETO — o proprio Dockerfile faz
-# `COPY mirrorview/package*.json ./` e `COPY mirrorview/beamup-start.js /start`, e os dois
-# falhavam. O deploy da BeamUp nao pegou porque ela sobe o `./Dockerfile` da raiz, que nunca
-# precisou dessa pasta.
-#
-# O preco de manter e' o MirrorStream carregar o codigo-fonte do MirrorView na imagem. E'
-# texto, nao video, e' a opcao que deixa as DUAS imagens construiveis com o MESMO contexto.
-# `test/dockerignore.test.js` trava isso.

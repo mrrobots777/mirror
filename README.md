@@ -1,88 +1,57 @@
-# MirrorStream — três produtos
+# MirrorView — addon de TV ao vivo
 
-O repositório tem **três produtos independentes**. A divisão é por **o que cada um entrega**:
+Servidor de **TV**: as 4 fontes de live, o **guia (EPG)**, o catálogo de canal, a página `/tv` e
+o P2P. É daqui que o Nuvio tira a **lista de canais** (rotas `/nuvio/*`).
 
-| Produto | Onde roda | O que é |
-|---|---|---|
-| [`plugin/`](plugin/) | dentro do app **Nuvio**, no aparelho | resolve stream de filmes, séries e anime (**11 fontes**), do IP residencial de quem assiste |
-| [`mirrorstream/`](mirrorstream/) | servidor (BeamUp) | **addon de VOD**: catálogo e metadados de filmes, séries e anime |
-| [`mirrorview/`](mirrorview/) | servidor | **addon de TV ao vivo**: as 4 fontes, o guia (EPG) e o catálogo de canal |
+**Nada de VOD.** Filmes, séries e anime são do [`mirrorstream/`](../mirrorstream/).
 
-**VOD é do MirrorStream; TV é do MirrorView.** Nenhum dos dois serve o outro: a rota do produto
-errado responde **404 e diz o nome do outro**, porque a SDK responde qualquer `/catalog/:type`
-com `{metas:[]}` e o cliente leria "o servidor não tem canais" em vez de "este não é o servidor
-de TV".
-
-## O que funciona hoje, e onde
+## O que está medido hoje
 
 ```
-Nuvio       plugin + os DOIS addons  →  stream das 11 fontes + catálogo + 327 canais + EPG
-Stremio     os DOIS addons           →  catálogo e guia. SEM player (ver abaixo)
+/catalog/tv/mirror-tv-live.json   200   327 canais
+/api/channels                     200
+/nuvio/catalog/channel/tv.json    200   327 canais, id numérico
+/tv                               200
+guia                              327 canais, 156 com programa hoje / 143 amanhã
+/api/vod/*, /api/streams/*        404   (é do MirrorStream, e o corpo diz isso)
 ```
 
-**O Stremio não tem player, e isso é decisão, não defeito.** As decisões 154/155 tiraram a
-camada de vídeo do servidor: o player no aparelho é o que resolve o problema de origem que
-recusa IP de datacenter — medido, várias fontes respondem 200 do IP residencial e 403 do
-datacenter. Os três addons anunciam `stream` no manifesto porque a SDK **exige** (todo handler
-definido tem que estar em `resources`), e respondem `{"streams":[]}` com 200: o Stremio lê
-"nenhuma fonte", que é a verdade, e não um 404, que ele leria como "o addon quebrou".
+## O que falta: a camada de player (etapa 2)
 
-Reconstruir o player no servidor é a **etapa 2**, e não está no histórico deste repositório
-(compactado em 7 commits). Para VOD os 10 scrapers e o motor ainda estão em
-`mirrorstream/src/` — falta o registro. Para TV é do zero: as 4 fontes não existem em lugar
-nenhum hoje.
+**O código não está no histórico deste repositório.** O histórico foi compactado em 7 commits
+(todos "1.0.1") e as decisões 154/155 removeram do servidor o relay, o proxy, 3 das 4 fontes de
+TV e o registro das fontes. O que **sobra** são os arquivos dos scrapers e o motor.
 
-## Instalar
+Para o MirrorView virar o addon de TV completo:
 
-| | Endereço | Para quê |
-|---|---|---|
-| **MirrorStream** | `https://e75602c18409-mirrorstream.baby-beamup.club/manifest.json` | catálogo e metadados de filmes, séries e anime |
-| **MirrorView** | `https://e75602c18409-mirrorview.baby-beamup.club/manifest.json` | catálogo de 327 canais e guia EPG do dia inteiro |
-| **Plugin** | `https://mrrobots777.github.io/mirrorstream` | resolve os streams das 11 fontes — **só Nuvio** |
+| falta | o que é |
+|---|---|
+| `core/tv-sources.js` | hoje é `METADADOS` (1 provedor, o REI); o completo tem `PROVIDERS` (4) + `getStreams` / `resolvePlaylist` / `membersOf` / `ownerOf` |
+| `lib/stream-relay.js` | o relay: serve a playlist com token novo a cada ida |
+| `lib/proxy.js` | máscara de URL e `workerDe()` |
+| `lib/etc.js` + `routes/segmentos.js` | a fonte ETC e o segmento que exige `Referer` |
+| `scrapers/embedtv.js`, `embedcanais.js`, `reidoscanais.js` | 3 das 4 fontes |
+| `handleStreams` de TV | hoje responde `{"streams":[]}` por decisão |
 
-No **Nuvio** você precisa dos três. No **Stremio**, os dois addons e nenhum plugin.
+**As 4 fontes já existiam funcionando no `plugin/`** — medido antes de TV sair de lá: 16/16 casos
+entregavam stream, zero erro, e o `rcd` saiu de 0 para 1 quando a regra de 403 mudou. São a
+referência da porta; a versão de servidor precisa do relay porque a playlist do REI chega como
+`text/plain` com token de 300 s, que o player não reconhece.
 
-Páginas de instalação (abrem no navegador, com o botão):
-
-```
-https://e75602c18409-mirrorstream.baby-beamup.club/install
-https://e75602c18409-mirrorview.baby-beamup.club/install
-```
-
-## Rodar
+## Rodar e construir
 
 ```bash
-plugin:       cd plugin      && npm ci && node build.js
-mirrorstream: cd mirrorstream && npm ci && PORT=7000 node src/server.js
-mirrorview:   cd mirrorview   && npm ci && PORT=7001 node src/server.js
+cd mirrorview && npm ci
+PORT=7001 PUBLIC_BASE_URL=http://localhost:7001 node src/server.js
 
-barreiras:    node --test test/ && node --test mirrorstream/test/ && node --test mirrorview/test/
-imagens:      docker build -t mirrorstream .                   # Dockerfile da raiz
-              docker build -f mirrorview/Dockerfile -t mirrorview .
+docker build -f mirrorview/Dockerfile -t mirrorview .   # contexto: a RAIZ do repo
 ```
 
-## Borda (Cloudflare Worker)
-
-[`worker-borda.mjs`](worker-borda.mjs) coloca os dois addons na borda: o primeiro pedido de cada
-objeto paga a origem, e o resto sai de um PoP perto de quem perguntou.
+## Testes
 
 ```bash
-npx wrangler deploy                                   # wrangler.toml, um worker por addon
-curl -s https://<worker>.workers.dev/__borda           # diagnóstico, responde no próprio PoP
-curl -sI https://<worker>.workers.dev/manifest.json | grep -i x-mirror
+node --test mirrorview/test/
 ```
 
-Medido de dentro do Brasil, **antes** do worker: `/manifest.json` levava **1,09 s** e
-`/meta/movie/tmdb:603.json` **0,60 s** — o cache de borda da zona do BeamUp só guarda o JSON
-*depois* de a origem responder.
-
-O que **não** vai para a borda está decidido em `classifica()` e cada regra está justificada em
-`test/worker-borda.test.js`: stream (é link de vídeo), `?date=` (1,1 MB por dia, medido),
-qualquer erro ≥ 400 (decisão 140), diagnóstico e telemetria, e qualquer rota não classificada.
-
-## Antes desta divisão
-
-O repositório era **um** servidor (`src/` na raiz) que servia catálogo de VOD **e** de TV, com a
-camada de player desligada pelas decisões 154/155. A divisão por domínio foi pedida em
-02/10/2026 — o histórico de cada decisão está em [`CONTEXTO.md`](CONTEXTO.md), e as armadilhas
-que já custaram tempo em [`AGENTS.md`](AGENTS.md).
+Inclui `split-tv.test.js` (a ponte do cluster), `tv-rotas.test.js` (página, p2p, gêneros, EPG,
+relay) e `catalogo-tv.test.js` (o `/nuvio/*` com id numérico).
