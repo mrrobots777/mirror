@@ -29,13 +29,15 @@ ENV MALLOC_ARENA_MAX=2
 ENV NODE_OPTIONS=--max-old-space-size=224
 ENV SCRAPER_TIMEOUT_MS=9000
 ENV PUBLIC_BASE_URL=https://e75602c18409-mirrorstream.baby-beamup.club
-ENV TV_BASE_URL=https://e75602c18409-mirrorhub2.baby-beamup.club
-# A ponte app1 -> cluster de TV. O default do codigo e 8000 e era MUITO BAIXO: o cluster leva
-# ~9,7s para resolver os canais mais pesados, entao o app1 abortava aos 8s, caia no fallback
-# local e refazia o trabalho inteiro — 8s + 9,7s passa dos ~12,3s que o gateway aguenta, e o
-# cliente levava 504 e via "sem fontes" no canal (medido: 10 dos 157 canais em 28/09/2026).
-# Com 11000 o app1 espera o cluster responder (~10,2s no total) e ainda sobra folga antes dos 12,3s.
-ENV TV_PROXY_TIMEOUT_MS=11000
+
+# MEDIDO 02/10/2026: `TV_BASE_URL` e `TV_PROXY_TIMEOUT_MS` saíram daqui. Os dois existiam para a
+# PONTE app1 -> cluster de TV (`lib/tv-split.js`), que repassava `/catalog/tv` e `/meta/tv` para o
+# outro app. Com a divisao em tres produtos essa ponte **não existe mais**: o MirrorStream nao
+# tem TV nenhuma (`TV_BASE_URL` so aparecia nele dentro de um comentario), e o MirrorView e' o
+# proprio servidor de TV. A linha apontava ainda para `mirrorhub2`, o app antigo.
+#
+# O que as configurava agora esta em `mirrorview/Dockerfile`, que e' o produto que tem TV.
+
 EXPOSE 3000
 USER node
 CMD ["node", "mirrorstream/src/server.js"]

@@ -1360,7 +1360,7 @@ gh auth login                    # scopes: gist read:org repo + admin:public_key
 gh ssh-key add ~/.ssh/id_ed25519_mr777.pub -t mirror-workstation
 
 # 2. Sincronizar as chaves GitHub no servidor dokku (obrigatório depois de add/renovar chave)
-beamup config a.baby-beamup.club devavmirror
+beamup config a.baby-beamup.club mrrobots777
 
 # 3. Publicar no GitHub (branch main -> `master` + `gh-pages`; `main` ja faz tracking de
 #    `novo/master`, entao o comando simples resolve). O `gh-pages` e' o que o Pages le:

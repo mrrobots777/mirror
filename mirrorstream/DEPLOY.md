@@ -22,7 +22,7 @@ gh ssh-key add ~/.ssh/id_rsa.pub -t mirror-workstation
 
 ```bash
 npm install -g beamup-cli
-beamup config a.baby-beamup.club devavmirror   # registra host/usuário e roda sync-github-keys no dokku
+beamup config a.baby-beamup.club mrrobots777   # registra host/usuário e roda sync-github-keys no dokku
 ```
 
 Sem este passo o push falha com `dokku@... Permission denied (publickey)` — o servidor só aceita chaves que constam no GitHub do usuário e **não sincroniza sozinho** ao adicionar uma chave nova.
