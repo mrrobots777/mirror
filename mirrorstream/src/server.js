@@ -1123,6 +1123,17 @@ app.use((req, res, next) => {
 });
 
 app.get(ROTAS.manifesto, (req, res) => {
+  // MEDIDO 02/10/2026: a zona do BeamUp REESCREVE o `Cache-Control` para `max-age=14400`
+  // (4 horas — decisao 140). Na renomeacao dos addons isso significou que a URL nova do
+  // MirrorStream serviu o manifesto VELHO da URL antiga por 4 h. O TTL da BORDA e' separado do
+  // TTL da origem, e o que a Cloudflare respeita para ele e' `CDN-Cache-Control`.
+  //
+  // O manifesto muda em deploy, nao em tempo real, entao `no-store` na borda custa pouco — e
+  // e' o unico jeito de um cliente instalar o addon certo logo apos o deploy, em vez de 4 h
+  // depois. `Cache-Control` continua 120 s para quem respeita a origem.
+  res.set("Cache-Control", "public, max-age=120");
+  res.set("CDN-Cache-Control", "no-store");
+  res.set("Cloudflare-CDN-Cache-Control", "no-store");
   const m = buildManifest(req.params.config);
   res.json({ ...m, logo: absolute("/logo.svg") });
 });

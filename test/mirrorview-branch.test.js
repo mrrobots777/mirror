@@ -189,3 +189,29 @@ test(
     );
   }
 );
+test("o manifesto nao e' cacheavel na BORDA (a zona reescreve para 4 horas)", () => {
+  // MEDIDO 02/10/2026: apos a renomeacao dos dois apps, a URL nova do MirrorView respondeu
+  // com o manifesto VELHO durante o TTL inteiro da borda:
+  //     cf-cache-status: HIT
+  //     age: 1768
+  //     cache-control: max-age=14400
+  // Quem lesse aquilo instalava o MirrorStream a partir da URL do MirrorView. O TTL da BORDA
+  // e' separado do TTL da origem, e o cabecalho que a Cloudflare respeita para ele e'
+  // `CDN-Cache-Control` (a decisao 140 ja tinha chegado nisso para o relay).
+  //
+  // Onde o header mora depende do produto: no MirrorStream ele foi posto NA ROTA do
+  // manifesto; no MirrorView o `Cache-Control` por caminho vive num middleware, entao o bloco
+  // esta no ramo `caminho === ROTAS.manifesto`. O teste procura o par perto de `ROTAS.manifesto`
+  // em vez de numa linha fixa, para nao depender de onde cada um resolve.
+  for (const p of ["mirrorstream", "mirrorview"]) {
+    const server = fs.readFileSync(path.join(RAIZ, p, "src", "server.js"), "utf8");
+    const i = server.indexOf("ROTAS.manifesto");
+    assert.ok(i > 0, `${p}: a rota do manifesto precisa existir`);
+    const janela = server.slice(i, i + 1200);
+    assert.match(
+      janela,
+      /CDN-Cache-Control"?\s*,\s*"no-store/,
+      `${p}: o manifesto precisa de CDN-Cache-Control: no-store — sem isso um deploy so aparece na borda 4 h depois`
+    );
+  }
+});

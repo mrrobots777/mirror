@@ -1023,6 +1023,17 @@ app.use((req, res, next) => {
     res.set("Cloudflare-CDN-Cache-Control", "no-store");
   } else if (caminho.includes(PREFIXOS.stream) || caminho.startsWith(PREFIXOS.api)) {
     res.set("Cache-Control", "no-store");
+  } else if (caminho === ROTAS.manifesto) {
+    // MEDIDO 02/10/2026: o manifesto foi servido ERRADO por 4 horas depois do deploy. O
+    // `Cache-Control` de 120 s e' reescrito pela zona do BeamUp para `max-age=14400` (decisao
+    // 140), entao a renomeacao do addon so aparecia depois de 4 h — e um cliente que lesse o
+    // manifesto velho instalava o MirrorStream a partir da URL do MirrorView. O que a Cloudflare
+    // respeita para o TTL da BORDA e' `CDN-Cache-Control`, separado do TTL da origem, entao o
+    // manifesto nao e' cacheavel na borda. Custo: o manifesto e' um arquivo pequeno lido na
+    // instalacao e periodicamente pelo cliente, nao no caminho quente.
+    res.set("Cache-Control", "public, max-age=120");
+    res.set("CDN-Cache-Control", "no-store");
+    res.set("Cloudflare-CDN-Cache-Control", "no-store");
   } else if (caminho === ROTAS.saude || caminho === ROTAS.metricas) {
     res.set("Cache-Control", "no-store");
   } else if (/\.json$/.test(caminho)) {
