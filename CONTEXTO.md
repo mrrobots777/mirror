@@ -1,11 +1,101 @@
-# CONTEXTO — Mirror (leia isto antes de qualquer tarefa)
+# CONTEXTO — MirrorStream (leia isto antes de qualquer tarefa)
 
 > Economia de tokens: este arquivo dá o contexto completo do projeto sem revisar o código.
 > Atualize-o SEMPRE que mudar arquitetura, decisões, env ou deploy. Detalhes de código: `AGENTS.md`.
 
 ## O que é
 
-Addon Stremio (Node.js >=20, **CommonJS**, Express 5, stremio-addon-sdk) que busca streams de anime, filmes, séries e TV ao vivo. Metadados: AniList (anime), Kitsu (ids `kitsu:`), TMDB (filmes/séries), Cinemeta (fallback IMDb→TMDB). **Sem comentários no código** (convenção).
+**Três produtos independentes** (decisão do dono, 02/10/2026), não um servidor só:
+
+| Produto | Onde | O que é |
+|---|---|---|
+| `plugin/` | dentro do app **Nuvio**, no aparelho | o **plugin**: resolve stream de filmes, séries e anime (**11 fontes**), do IP residencial de quem assiste |
+| `mirrorstream/` | servidor (BeamUp) | **addon de VOD**: catálogo e meta de filmes/séries, e o player na etapa 2 |
+| `mirrorview/` | servidor | **addon de TV ao vivo**: as 4 fontes, o guia (EPG) e o catálogo de canal |
+
+**VOD é do MirrorStream; TV é do MirrorView.** Nenhum serve o outro: a rota do produto errado
+responde **404 e diz o nome do outro** (a SDK responderia `{metas:[]}` e o cliente leria
+"o servidor não tem canais"). Quem usa **Nuvio** instala o plugin e o addon MirrorView (é
+dele que sai a lista de canais). Quem usa **Stremio** instala o MirrorStream, sem plugin.
+
+Stack: Node.js >=20, **CommonJS**, Express 5, stremio-addon-sdk, compression. Metadados:
+AniList (anime), Kitsu (ids `kitsu:`), TMDB (filmes/séries), Cinemeta (fallback IMDb→TMDB).
+
+> **Por que TV saiu do plugin** (decisão medida, não preferência): o plugin precisa de um
+> *catálogo* de TV, e esse catálogo passa a vir do addon MirrorView instalado no Nuvio.
+> Deixar as 4 fontes no plugin seria duplicá-las — e o preço não é só de manutenção: o plugin
+> roda do IP residencial (todas as origens respondem) e o addon do IP de datacenter (várias
+> recusam com 403/429, medido). Duas versões do mesmo player medindo diferente é pior que uma.
+
+## Rodada 02/10/2026 (2ª) — três produtos: `plugin/` · `mirrorstream/` · `mirrorview/`
+
+O dono: *"eé pra existir o addon MirrorStream, o addon MirrorView e o plugin MirrorStream"*.
+Até aqui o repositório era **um** servidor (`src/` na raiz) e o plugin (`nuvio/`) tinha as
+15 fontes. Agora são três produtos, cada um com o seu `package.json`, `Dockerfile` e testes.
+
+**O que mudou de verdade**
+
+- **`plugin/`**: 15 → **11** fontes. Saem as 4 de TV e, com elas, `lib/canais.js` (o mapa
+  número↔slug), `lib/canal.js` e `lib/hls.js`. `apresentacao.js` perde o atalho de TV. O mapa
+  foi para o `mirrorview/src/lib/canais.js`, que é quem publica o catálogo.
+- **Os dois servidores foram excisados, não desligados por flag.** `mirrorstream/src/server.js`
+  tem **zero** referência a TV; `mirrorview/src/server.js`, zero rota de VOD. A excisão é por
+  **casamento de chave, nunca linha solta** — apagar linha por linha deixa chave pendurada, que
+  é como a decisão 155 perdeu um `app.listen` e o processo passou a sair com código 0 sem
+  escutar, com a barreira inteira verde.
+- **404 cruzado com o nome do outro produto.** Medido: `mirrorstream` → `/api/vod/genres`
+  **200**, `/api/channels` `/nuvio/*` `/tv` **404**; `mirrorview` → `/catalog/tv/*` `/api/channels`
+  `/nuvio/catalog/channel/tv.json` **200 (327 canais)**, `/api/vod/*` `/api/streams/*` **404**.
+- **Identidade**: `com.mirrorstream.addon` (MirrorStream, `types: movie, series`) e
+  `com.mirrorstream.view` (MirrorView, `types: tv`). Os dois `id` são diferentes de propósito —
+  dois addons com o mesmo id não convivem. O plugin publica `name/author: MirrorStream`.
+- **`addon/` deixou de existir.** O `Dockerfile` da raiz constrói o `mirrorstream/`; o do
+  MirrorView é `mirrorview/Dockerfile`.
+
+**O que falta (etapa 2): a camada de player dos dois addons.** Ela não está no histórico
+deste repositório — o git foi compactado em 7 commits (todos "1.0.1") e as decisões 154/155
+tiram do servidor o relay, o proxy, 3 das 4 fontes de TV e o registro das fontes. A lista do
+que falta está em `mirrorview/README.md` e `mirrorstream/README.md`. As 4 fontes de TV
+**existem funcionando no `plugin/`** e são a referência da porta.
+
+### A classe de defeito que a renomeação não pega (e que custou 3 pushes vermelhos)
+
+Nada quebra quando uma pasta é renomeada: o caminho continua "parecendo válido". O que
+aconteceu, medido:
+
+1. `plugin/tools/gerar-indice.js` tinha `path.join(RAIZ, "..", "addon", "src")` como **padrão**
+   (e o padrão é o que a CI usa). Sem `src/scrapers/xtream.js` o gerador não achava as
+   credenciais dos painéis, não gerava índice, e o passo seguinte morria com
+   *"public/ sem idx/indice.json"*.
+2. `SEM_INDEX` — o texto **que o usuário vê no aparelho** — mandava publicar `nuvio/public/`
+   e rodar `nuvio/tools/atualizar-indice.yml`. Mandar o cara para um caminho morto é pior que
+   não dizer nada.
+3. Havia **duas cópias dos workflows** em `plugin/tools/*.yml` (138 e 118 linhas). Actions só lê
+   `.github/workflows/` — elas nunca rodaram, só divergiram, e a divergência apontava para o
+   `addon/`.
+4. `plugin/tools/casos.js` fazia `require("../../addon/src/core/nomes.js")`. Um `require`
+   quebrado é um `catch` silencioso, e o arquivo é ferramenta de medição — nada no CI o executava.
+5. `test/produtos-sobem.test.js` tinha `require("/home/ubuntu/mirror/plugin/...")` — **caminho
+   absoluto da minha máquina**. Passava aqui e quebrava só no GitHub. É a pior classe de defeito
+   de teste: o único lugar que roda é justamente onde ele não roda.
+6. `publicar-pages.yml` tinha um `fi` **colado** no `echo` seguinte. Ninguém executa workflow
+   antes de subir, então o erro só apareceu no ar.
+
+**Como ficou travado** — `test/pastas.test.js` (8) e `test/workflows.test.js` (7): nenhuma pasta
+renomeada citada **como caminho**; a varredura **não** confunde a rota `/nuvio/manifest.json`
+(protocolo do adapter do Nuvio) com a pasta (e há teste dessa distinção); todo `require`
+relativo aponta para arquivo existente; nenhum caminho absoluto em teste; nenhum fechamento de
+bloco colado; todo `if [` tem `fi`; CI conhece os três produtos e o piso soma as três barreiras.
+
+**Um detalhe do verificador que vale registrar** (levou três versões erradas, e um
+verificador que dá resposta errada é pior do que nenhum): distinguir `require` de código de
+`require` dentro de string não é contar aspas. (a) contar aspas antes do `require` — `'...require("x")'`
+tem 4 aspas antes e está **dentro** da string, que o `build.js` monta para o bundle;
+(b) scanner sem lembrar o **delimitador** — `"aspas require('./interno')"` fecha na `"`, não
+na `'`; (c) scanner sem **pilha** — a string de dentro de `${}` voltava para CÓDIGO em vez de
+EXPRESSÃO, o `}` que fecha o `${` passava, e o resto do arquivo achava que ainda estava no
+template. Por isso o scanner tem teste próprio, com um caso que exige que
+`` `${ require("./dentro") }` `` conte e um que exige que o texto **depois** do `${}` não conte.
 
 ## Estado atual
 
@@ -271,7 +361,37 @@ Foi o achado mais caro do dia, e não tem a ver com o REI em si: `tv-sources.get
 
 **Medido depois do deploy**: catálogo **259 → 283**; os 10 canais testados passaram de **0/10 para 10/10** com stream, e `bandmg` — que nem aparecia na lista — agora entrega stream e **o ffmpeg decodifica**. Os 3 que voltaram vazios na primeira medição (`gloobinho`, `sonymovies`, `sbtpi`) recuperaram sozinhos 45s depois: é a origem rotacionando, não o catálogo.
 
-## Arquitetura (detalhes na árvore do `AGENTS.md`)
+## Arquitetura — três produtos (detalhes na árvore do `AGENTS.md`)
+
+> O que vem a seguir descreve a arquitetura **de um servidor só** e vale como histórico de
+> cada peça. Onde as coisas estão **agora**, e o que é de cada produto:
+
+- **`plugin/`** — o app Nuvio. `src/core/fontes.js` é o registro das **11** fontes de VOD
+  (`shg ron aon atb spt blz spc ato rtd dgo vzr`). `src/lib/apresentacao.js` é o **único**
+  lugar que monta o objeto de stream (as 11 passam por `apresenta()`; um teste falha se
+  alguma montar na mão). `src/lib/http.js` tem o prazo que cobre **headers E corpo**.
+  `tools/gerar-indice.js` gera o índice estático que o plugin publica no GitHub Pages.
+  **Não tem TV** — `reidosembeds/embedtv/embedcanais/reidoscanais` e `lib/{canais,canal,hls}.js`
+  foram removidos com elas.
+- **`mirrorstream/src/`** — servidor de VOD. `server.js` tem **zero** referência a TV
+  (2099 → 1739 linhas) e o guarda `SO_DO_MIRRORVIEW` devolve 404 com o nome para
+  `/api/channels*`, `/nuvio/*`, `/tv` e `/p2p/*`. Catálogo/meta via TMDB/AniList,
+  `/api/vod/*`, páginas, `/health`, `/metrics`. **O caminho de stream responde
+  `{"streams":[]}` por decisão** (154/155): o servidor é catálogo.
+- **`mirrorview/src/`** — servidor de TV. `core/tv-sources.js` é `METADADOS` com **um**
+  provedor (o REI, dono da lista e do guia). `lib/epg.js`, `lib/tv-split.js`,
+  `lib/nuvio-canais.js`, `routes/nuvio.js`, a página `/tv`, o P2P e a ponte do cluster.
+  O guarda `SO_DO_MIRRORSTREAM` devolve 404 com o nome para `/api/vod/*` e
+  `/api/streams/*`.
+- **Barreiras (294, todas sem rede)**: `mirrorstream/test/` (240) · `mirrorview/test/` (19) ·
+  `test/` (35, o que é dos três — inclui `produtos-sobem.test.js`, que **sobe os dois
+  servidores de verdade**). CI soma as três e o piso é 294.
+- **`test/pastas.test.js` e `test/workflows.test.js`** travam as duas classes de defeito que
+  renomear três produtos **não pega por si**: citar uma pasta que não existe mais (o
+  `gerar-indice.js` ainda lia `../addon/src` e derrubou a publicação) e ter um
+  caminho absoluto no teste (passava aqui, quebrava só na CI).
+
+### Como era antes (um servidor só — histórico)
 
 - `src/server.js` — handlers (manifest/meta/catalog/stream), parse de config, rate limit, gzip, cache, `/resolve`, `/stream/hls`, `/stream/proxy`.
 - `src/scrapers/` — **embedtv** (TV ao vivo), **otakulogia/animesdigital/aon/topanimes/anitube** (anime: SHG/RON/AON/TOP/ATB), **xtream** (BLZ/SPC/ATO), **playerflix** (SPT), **kakito** (KKT VOD), **doramogo** (DGO: doramas), **tmdb**, **cinemeta**, **kitsu**, **anilist**.

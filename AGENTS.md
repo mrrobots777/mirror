@@ -2,7 +2,45 @@
 
 > **Antes de qualquer tarefa, leia [`CONTEXTO.md`](CONTEXTO.md)** — contexto compacto (estado, decisões firmes, env de produção, comandos, armadilhas) para não revisar o código inteiro. Atualize os dois arquivos quando algo mudar.
 
-## Visão geral
+## ESTADO ATUAL (leia antes de qualquer coisa abaixo)
+
+**Este arquivo é em grande parte um HISTÓRICO de decisões e medições.** Onde ele fala de
+`src/`, `nuvio/`, `addon/` ou `stremio/` como caminho do código, está descrevendo o que
+existia **quando a medição foi feita** — não onde as coisas estão agora. O que importa hoje:
+
+| Produto | Pasta | O que é | Manifesto |
+|---|---|---|---|
+| plugin do Nuvio | `plugin/` | resolve stream de filmes/séries/anime, **11 fontes**, no aparelho | `name: MirrorStream` |
+| addon de VOD | `mirrorstream/` | catálogo + meta de filmes/séries; player na etapa 2 | `id: com.mirrorstream.addon`, `name: MirrorStream`, `types: movie, series` |
+| addon de TV | `mirrorview/` | as 4 fontes de live, guia (EPG), catálogo de canal, página `/tv`, p2p | `id: com.mirrorstream.view`, `name: MirrorView`, `types: tv` |
+
+**VOD é do MirrorStream; TV é do MirrorView.** Cada servidor tem **zero** código do outro: a
+rota do produto errado responde **404 e diz o nome do outro produto**. `mirrorstream/src/server.js`
+não tem nenhuma referência a TV (1739 linhas) e `mirrorview/src/server.js` nenhuma rota de VOD.
+
+**Comandos (os três produtos):**
+
+```bash
+node --test test/ mirrorstream/test/ mirrorview/test/   # 294 testes, sem rede — a barreira
+cd plugin && node build.js                              # 11 bundles + manifest.json
+cd plugin && node tools/gerar-indice.js                 # índice estático do GitHub Pages
+cd mirrorstream && PORT=7000 node src/server.js
+cd mirrorview   && PORT=7001 node src/server.js
+```
+
+**Duas barreiras que não existiam e que existem por causa da divisão** (as duas pegam a classe
+de defeito que renomear pasta não pega por si — ver `CONTEXTO.md`, rodada 02/10/2026 2ª):
+`test/pastas.test.js` (nenhuma pasta renomeada citada **como caminho**; todo `require` relativo
+resolve; a rota `/nuvio/*` não é confundida com a pasta `nuvio/`) e `test/workflows.test.js`
+(nenhum caminho absoluto em teste; nenhum fechamento de bloco colado no workflow).
+
+**Nome das pastas antigas:** `nuvio/` → `plugin/`, `addon/` → `mirrorstream/`, `stremio/` →
+`mirrorview/`. As seções abaixo usam os nomes antigos porque registram o que foi medido na
+época; se você estiver mexendo no código, os caminhos são os da tabela acima.
+
+---
+
+## Visão geral (histórico — um servidor só, antes da divisão)
 
 O Mirror são **DUAS peças** desde a decisão 154 (02/10/2026):
 
@@ -1035,7 +1073,7 @@ Detalhe e a lista do que falta para o `stremio/` ter player: `stremio/README.md`
 
 **Barreiras:** `addon/test/` = 276 (o servidor de catálogo, com os testes do contrato do plugin),
 `test/` = 15 (o repo: segredos, worker, deploy e `produtos-sobem.test.js`, que **sobe os dois
-servidores de verdade**). Piso do CI: **291**. A lição da 155 continua valendo: **texto não
+servidores de verdade**). Piso do CI: **294**. A lição da 155 continua valendo: **texto não
 executa** — se o servidor não imprimir `[Mirror] listening on`, o teste falha.
 
 **Só se prova no aparelho (3 coisas, documentadas em `nuvio/STATUS.md` §4):** o teto de 1 MB do
@@ -1341,7 +1379,7 @@ ssh dokku@a.baby-beamup.club logs e75602c18409-mirrorhub -n 50   # = beamup logs
 
 - **CI em todo push** (`/.github/workflows/testes.yml`): sintaxe do server/scrapers CommonJS,
   sintaxe do worker (**ESM — `node -c` nele dá SyntaxError**, por isso o passo separado), a
-  barreira `node --test test/` e um **piso de contagem** (hoje **285**) para pegar teste que
+  barreira `node --test test/ mirrorstream/test/ mirrorview/test/` e um **piso de contagem** (hoje **294**, a soma das tres) para pegar teste que
   "sumiu". Rode local com `node --test test/` antes de pushar.
 - **O site do plugin** (`https://mrrobots777.github.io/mirror/`) é publicado por
   `/.github/workflows/publicar-pages.yml` — vê `nuvio/STATUS.md` §5 (duas armadilhas medidas
