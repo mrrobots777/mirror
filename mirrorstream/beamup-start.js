@@ -1,12 +1,5 @@
 #!/usr/bin/env node
-console.log(
-  "[beamup-start] argv=" + JSON.stringify(process.argv.slice(1)) +
-  " cwd=" + process.cwd() +
-  " PORT=" + process.env.PORT +
-  " NODE_ENV=" + process.env.NODE_ENV +
-  " PUBLIC_BASE_URL=" + process.env.PUBLIC_BASE_URL +
-  " DATA_DIR=" + process.env.DATA_DIR +
-  " SCRAPER_TIMEOUT_MS=" + process.env.SCRAPER_TIMEOUT_MS +
-  " BEAMUP_TEST_ENV=" + process.env.BEAMUP_TEST_ENV
-);
+const os = require("os");
+console.log("[sonda] hostname=" + os.hostname());
+console.log("[sonda] chaves de env: " + Object.keys(process.env).sort().join(","));
 require("/app/mirrorstream/src/server.js");
