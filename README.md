@@ -45,7 +45,7 @@ mirrorview:   cd mirrorview   && npm ci && PORT=7001 node src/server.js
 barreiras:    node --test test/ && node --test mirrorstream/test/ && node --test mirrorview/test/
 imagens:      docker build -t mirrorstream .                 # Dockerfile da raiz (BeamUp)
               docker build -f mirrorview/Dockerfile -t mirrorview .
-plugin:       https://mrrobots777.github.io/mirror/         # é este que o Nuvio instala
+plugin:       https://mrrobots777.github.io/mirrorstream/  # é este que o Nuvio instala
 ```
 
 ## O que falta

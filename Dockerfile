@@ -28,7 +28,7 @@ ENV DATA_DIR=/tmp
 ENV MALLOC_ARENA_MAX=2
 ENV NODE_OPTIONS=--max-old-space-size=224
 ENV SCRAPER_TIMEOUT_MS=9000
-ENV PUBLIC_BASE_URL=https://e75602c18409-mirrorhub.baby-beamup.club
+ENV PUBLIC_BASE_URL=https://e75602c18409-mirrorstream.baby-beamup.club
 ENV TV_BASE_URL=https://e75602c18409-mirrorhub2.baby-beamup.club
 # A ponte app1 -> cluster de TV. O default do codigo e 8000 e era MUITO BAIXO: o cluster leva
 # ~9,7s para resolver os canais mais pesados, entao o app1 abortava aos 8s, caia no fallback

@@ -27,6 +27,18 @@ ENV DATA_DIR=/tmp
 # `global.gc()` nao baixa nada (medido 157 -> 156). Com 2 arenas cai para 139MB, -18MB.
 ENV MALLOC_ARENA_MAX=2
 ENV NODE_OPTIONS=--max-old-space-size=224
+
+# MEDIDO 02/10/2026: este Dockerfile NAO tinha `PUBLIC_BASE_URL`, e o `mirrorstream/` tem.
+# Sem ela o gateway do BeamUp reescreve o `Host` para o nome do app, o guard de auto-detect
+# rejeita e as URLs saem RELATIVAS — que e' a quebra de TV ao vivo registrada nas decisoes
+# 138/139 (logo, poster e `/tv` sao montados a partir daqui). `config:set` do BeamUp nao
+# injeta env no servico, entao o valor tem de ficar AQUI, como no `Dockerfile` da raiz.
+#
+# O nome do app no BeamUp E' a URL: quando o dono renomeou `mirrorhub2` para `mirrorview`,
+# o endereco mudou e este valor precisou mudar junto. Trocar o nome do app sem trocar esta
+# linha nao quebra o build — so as URLs.
+ENV PUBLIC_BASE_URL=https://e75602c18409-mirrorview.baby-beamup.club
+
 EXPOSE 3000
 USER node
 CMD ["node", "mirrorview/src/server.js"]

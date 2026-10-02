@@ -8,7 +8,13 @@ const ARTIGULOS = new Set([
   "der", "die", "das", "den", "do", "da", "dos", "e", "y"
 ]);
 
-const BASE_PADRAO = "https://mrrobots777.github.io/mirror";
+// MEDIDO 02/10/2026: o repositorio foi renomeado de `mirror` para `mirrorstream`, entao a
+// URL do Pages mudou. A URL antiga (`github.io/mirror/`) responde **404** — quem tinha o
+// plugin instalado precisa instalar de novo pelo endereco novo.
+// O `test/pastas.test.js` trava que este valor bate com o nome do repositorio: um
+// repositorio renomeado sem este valor corrigido nao quebra build nenhum, so quebra o
+// aparelho de quem ja tinha o plugin.
+const BASE_PADRAO = "https://mrrobots777.github.io/mirrorstream";
 
 const SEM_INDEX = [
   "indice estatico indisponivel (404/erro ao ler o shard).",

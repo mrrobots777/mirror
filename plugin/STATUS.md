@@ -502,7 +502,7 @@ próprio anime (ver acima).
 ## 3. O que falta
 
 1. **~~Os 15 `.js` + o `manifest.json` estão no `dist/` e no `public/`; falta publicar.~~**
-   **Publicado** (§5): `https://mrrobots777.github.io/mirror/manifest.json` → 200 com 15
+   **Publicado** (§5): `https://mrrobots777.github.io/mirrorstream/manifest.json` → 200 com 15
    scrapers, build por workflow a cada push e a cada 6 h. Continua valendo: não há fonte
    declarada sem arquivo nem arquivo sem fonte — o `build.js` falha alto nos dois sentidos
    (`fonte do registro sem src/scrapers/<arquivo>` e `src/scrapers/<arquivo> nao esta no
@@ -559,7 +559,7 @@ Nada disso é bloqueante para instalar — são as três coisas a olhar no prime
 
 1. **`node build.js`** — é ele que gera o `manifest.json` e copia tudo para `public/`.
    Rodar **antes** de publicar.
-2. **Publicação: automática, pelo workflow.** O site é **`https://mrrobots777.github.io/mirror/`**
+2. **Publicação: automática, pelo workflow.** O site é **`https://mrrobots777.github.io/mirrorstream/`**
    e o Pages do repo `mrrobots777/mirror` está em **modo `workflow`** (não `legacy`) — quem
    publica é **`.github/workflows/publicar-pages.yml`**, que roda a cada push nas branches
    `gh-pages`/`master` e a cada 6 h, faz `npm ci` + `node build.js` e manda **só `nuvio/public/`**
@@ -581,7 +581,7 @@ Nada disso é bloqueante para instalar — são as três coisas a olhar no prime
    publicado e **rebuild** (`node build.js`) — a base está escrita dentro do bundle.
    Hoje: `https://mrrobots777.github.io/mirror`.
 4. **No Nuvio:** Settings → Plugins → **Add repository URL** =
-   `https://mrrobots777.github.io/mirror/manifest.json` (o app anexa o `/manifest.json` se faltar).
+   `https://mrrobots777.github.io/mirrorstream/manifest.json` (o app anexa o `/manifest.json` se faltar).
    O app atualiza o repositório sozinho a cada **6 h**.
 5. **Escolher as fontes** na tela de Plugins do Nuvio. As 15 rodam em paralelo, 10 por vez,
    120 s no total — a mais lenta aqui levou 3,8 s (o BLZ).

@@ -1398,24 +1398,40 @@ Há teste (`test/produtos-sobem.test.js`) que falha se eles voltarem a ser iguai
 A sigla de cada fonte (`SHG`, `SPT`, `REI`…) **não mudou** — é o badge da fonte no card, com
 `maxLines = 1`, e a sigla é o que o usuário reconhece. Ver `nuvio/STATUS.md` §1c.
 
-### O que NÃO foi feito, porque é produção e precisa de decisão
+### Feito em 02/10/2026 (2ª rodada) — os dois endereços renomeados
 
-1. **O endereço do BeamUp.** Hoje os apps são `mirrorhub` (catálogo) e `mirrorhub2` (cluster de
-   TV), sob o hash `e75602c18409`, e a URL é `https://e75602c18409-mirrorhub.baby-beamup.club`.
-   O dono quer **MirrorStream** como endereço. No BeamUp o nome do app **é** o endereço: trocar
-   o nome cria um **endereço novo** (`<hash>-mirrorstream.baby-beamup.club`), e os apps antigos
-   precisam ser removidos à mão. Isso é operação de produção, não de repositório — e o
-   `PUBLIC_BASE_URL`/`TV_BASE_URL` do `Dockerfile` precisam do valor novo.
+O dono respondeu às duas perguntas: *"renomear todos os dois endereços o mirrorstream e o
+mirrorview, lembra que eram dois apps"* e *"renomear o repositório"*.
 
-2. **A URL do plugin.** O repositório é `mrrobots777/mirror` e o Pages publica em
-   `https://mrrobots777.github.io/mirror/`. É **dessa URL** que o Nuvio instala o plugin.
-   Renomear o repositório para `mirrorstream` deixaria de fora **quem já instalou** — o Nuvio
-   busca pelo repositório salvo. Se o dono quiser, dá para publicar **os dois** nomes por um
-   tempo.
+**O repositório GitHub:** `mrrobots777/mirror` → **`mrrobots777/mirrorstream`**. O Pages
+passou a servir `https://mrrobots777.github.io/mirrorstream/` (**200 medido** na hora) e a
+URL antiga **404** — que era o preço aceito: **quem já tinha o plugin instalado precisa
+remover e instalar de novo**, porque o Nuvio busca pelo endereço salvo e não descobre que ele
+mudou. `BASE_PADRAO` (`plugin/src/lib/indice.js`), o `plugin/README.md` e o
+`publicar-pages.yml` foram apontados junto.
 
-3. **O deploy em si.** O `Dockerfile` da raiz mudou (`COPY addon/package*.json`,
-   `CMD ["node", "addon/src/server.js"]`). **A produção só volta a subir depois de um deploy com
-   o Dockerfile novo** — antes disso o build falha por `COPY` não encontrado.
+O detalhe que quase passou: **`BASE_PADRAO` é uma string, não um caminho.** Renomear o repo
+sem mexer nele **não quebra build, não quebra CI e não quebra nenhum teste** — só quebra o
+aparelho, em silêncio, para quem já tinha o plugin. Por isso `test/pastas.test.js` ganhou um
+teste que exige que a URL do código, a do README e o branch do workflow concordem.
+
+**Os dois apps do BeamUp:** `mirrorhub` → **`mirrorstream`** (VOD) e `mirrorhub2` →
+**`mirrorview`** (TV), mesmo hash `e75602c18409`. No BeamUp **o nome do app é a URL**: o push
+para um path novo **cria** o app (foi assim que `mirrorhub2` nasceu, sem `beamup create`, que
+não existe — a CLI só tem `config/init/deploy/secrets/logs/delete`). Os apps antigos precisam
+ser removidos à mão depois que os novos responderem.
+
+**Um buraco que a medição achou no caminho:** o `mirrorview/Dockerfile` **não tinha
+`PUBLIC_BASE_URL`**. Sem ele o gateway do BeamUp reescreve o `Host` para o nome do app, o guard
+de auto-detect rejeita e as URLs saem **relativas** — que é exatamente a quebra de TV ao vivo
+registrada nas decisões anteriores. Medido antes: o app2 de hoje servia `poster` absoluto (do
+REI) e `logo` vazio. Corrigido com o valor do app novo.
+
+### O que continua Depending de ação sua
+
+Remover os dois apps antigos do BeamUp (`mirrorhub` e `mirrorhub2`) **depois** que os novos
+responderem 200 — é operação de produção, e a conta é sua.
+
 ## A separação em três produtos — 02/10/2026
 
 O dono pediu para separar o projeto: **plugin Nuvio**, **addon de catálogo para o Nuvio**, e

@@ -7,8 +7,12 @@ fim, e é medido).
 É este endereço que o Nuvio instala (Settings → Plugins → **Add repository URL**):
 
 ```
-https://mrrobots777.github.io/mirror/
+https://mrrobots777.github.io/mirrorstream/
 ```
+
+> **Renomeado em 02/10/2026.** O repositório era `mrrobots777/mirror` e o endereço antigo
+> (`…/github.io/mirror/`) agora responde **404**. Quem já tinha o plugin instalado precisa
+> remover e instalar de novo pelo endereço acima — o Nuvio não sabe que a URL mudou.
 
 ## As 11 fontes
 

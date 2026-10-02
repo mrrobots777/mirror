@@ -21,7 +21,7 @@ não tem nenhuma referência a TV (1739 linhas) e `mirrorview/src/server.js` nen
 **Comandos (os três produtos):**
 
 ```bash
-node --test test/ mirrorstream/test/ mirrorview/test/   # 294 testes, sem rede — a barreira
+node --test test/ mirrorstream/test/ mirrorview/test/   # 296 testes, sem rede — a barreira
 cd plugin && node build.js                              # 11 bundles + manifest.json
 cd plugin && node tools/gerar-indice.js                 # índice estático do GitHub Pages
 cd mirrorstream && PORT=7000 node src/server.js
@@ -1045,7 +1045,7 @@ e e' o que o usuario reconhece.
 **Fica pendente de producao** (nao e' coisa de repositorio): o **endereco do BeamUp** — o nome do
 app no BeamUp **e'** a URL, entao renomear `mirrorhub` para `mirrorstream` cria um endereco novo e
 exige remover o app antigo; e a **URL do plugin**, que hoje e'
-`https://mrrobots777.github.io/mirror/` — de onde o Nuvio instala. Se o repo for renomeado,
+`https://mrrobots777.github.io/mirrorstream/` — de onde o Nuvio instala. Se o repo for renomeado,
 quem ja instalou para de receber atualizacao ate instalar de novo. Detalhe em `CONTEXTO.md`.
 
 ### A separação em três produtos (02/10/2026)
@@ -1073,7 +1073,7 @@ Detalhe e a lista do que falta para o `stremio/` ter player: `stremio/README.md`
 
 **Barreiras:** `addon/test/` = 276 (o servidor de catálogo, com os testes do contrato do plugin),
 `test/` = 15 (o repo: segredos, worker, deploy e `produtos-sobem.test.js`, que **sobe os dois
-servidores de verdade**). Piso do CI: **294**. A lição da 155 continua valendo: **texto não
+servidores de verdade**). Piso do CI: **296**. A lição da 155 continua valendo: **texto não
 executa** — se o servidor não imprimir `[Mirror] listening on`, o teste falha.
 
 **Só se prova no aparelho (3 coisas, documentadas em `nuvio/STATUS.md` §4):** o teto de 1 MB do
@@ -1379,9 +1379,9 @@ ssh dokku@a.baby-beamup.club logs e75602c18409-mirrorhub -n 50   # = beamup logs
 
 - **CI em todo push** (`/.github/workflows/testes.yml`): sintaxe do server/scrapers CommonJS,
   sintaxe do worker (**ESM — `node -c` nele dá SyntaxError**, por isso o passo separado), a
-  barreira `node --test test/ mirrorstream/test/ mirrorview/test/` e um **piso de contagem** (hoje **294**, a soma das tres) para pegar teste que
+  barreira `node --test test/ mirrorstream/test/ mirrorview/test/` e um **piso de contagem** (hoje **296**, a soma das tres) para pegar teste que
   "sumiu". Rode local com `node --test test/` antes de pushar.
-- **O site do plugin** (`https://mrrobots777.github.io/mirror/`) é publicado por
+- **O site do plugin** (`https://mrrobots777.github.io/mirrorstream/`) é publicado por
   `/.github/workflows/publicar-pages.yml` — vê `nuvio/STATUS.md` §5 (duas armadilhas medidas
   lá: `path` do artefato tem de ser `nuvio/public`, e o environment só aceita `gh-pages`).
 - **ATENÇÃO — o que está no GitHub e o que está na prod podem divergir.** Medido 02/10/2026:

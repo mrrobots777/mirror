@@ -5,17 +5,24 @@ name: publicar-pages
 #
 # POR QUE EXISTE: o plugin e' lido pelo Nuvio de um endereco HTTP, entao o proprio repo
 # do plugin precisa estar servido. Este workflow gera o que o runtime le (`public/`: o
-# `manifest.json` mais os 15 `<fonte>.js`) e o entrega como artefato de Pages.
+# `manifest.json` mais os 11 `<fonte>.js`) e o entrega como artefato de Pages.
 #
-# NAO E' O MESMO QUE `atualizar-indice.yml`: aquele faz commit do indice no repositorio
-# (as credenciais dos paineis vivem no repo do ADDON, entao o indice so pode ser gerado
-# la). Este aqui so constroi e publica — nenhum commit, nenhum segredo.
+# Este workflow so constroi e publica — nenhum commit, nenhum segredo. O indice que o
+# `schedule` gera e' sempre lido do `../mirrorstream` do proprio monorepo, que e' onde
+# vivem as credenciais dos paineis.
 #
-# RODA NO REPO DO PLUGIN (conta `mrrobots777`, repo `mirror`) — e' ele que publica em
-# `https://mrrobots777.github.io/mirror/`. O repositorio do Pages e' `mrrobots777/mirror`
-# em modo **workflow** (nao `legacy`), porque o deploy vem do artefato de
-# `upload-pages-artifact` e nao de um commit na branch: em `legacy` o Pages serviria a
-# branch `gh-pages` e o `manifest.json` nao existiria no ar.
+# RODA NO REPO DO PLUGIN (conta `mrrobots777`, repo `mirrorstream`) — e' ele que publica em
+# `https://mrrobots777.github.io/mirrorstream/`.
+#
+# MEDIDO 02/10/2026: o repo foi renomeado de `mirror` para `mirrorstream`, e a URL antiga
+# passou a responder **404** — quem tinha o plugin instalado precisa instalar de novo pelo
+# endereco novo. O mesmo valor esta em `plugin/src/lib/indice.js` (`BASE_PADRAO`) e no
+# `plugin/README.md`, e o `test/pastas.test.js` trava que os tres concordam: renomear o
+# repo sem mexer neles nao quebra build nenhum, so quebra o aparelho.
+#
+# O repositorio do Pages esta em modo **workflow** (nao `legacy`), porque o deploy vem do
+# artefato de `upload-pages-artifact` e nao de um commit na branch: em `legacy` o Pages
+# serviria a branch `gh-pages` e o `manifest.json` nao existiria no ar.
 #
 # O environment `github-pages` deste repo so aceita deploy pela branch `gh-pages` (regra
 # de protecao medida em 02/10/2026): rodar em `master` — por `push` ou por
@@ -27,10 +34,10 @@ on:
   push:
     branches: ["gh-pages", "main", "master"]
   schedule:
-    # O MESMO relogio de `tools/atualizar-indice.yml` (minuto 17 a cada 6 h), e pelo
-    # mesmo motivo: o Nuvio atualiza o repositorio de plugin a cada 6 h tambem, entao um
-    # ciclo de 6 h mantem o plugin publicado no maximo uma geracao atrasado. O `push`
-    # cobre o deploy na hora; o `schedule` cobre o indice que mudou no repo do addon.
+    # A cada 6 h, e pelo mesmo motivo do plugin: o Nuvio atualiza o repositorio de plugin
+    # a cada 6 h tambem, entao um ciclo de 6 h mantem o plugin publicado no maximo uma
+    # geracao atrasado. O `push` cobre o deploy na hora; o `schedule` cobre o indice que
+    # mudou no repo do addon.
     - cron: "17 */6 * * *"
   workflow_dispatch:
 

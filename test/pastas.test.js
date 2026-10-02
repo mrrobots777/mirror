@@ -274,6 +274,48 @@ test("todo require relativo do repo aponta para um arquivo que existe", () => {
   assert.deepStrictEqual(quebrados, [], `require quebrado:\n    ${quebrados.join("\n    ")}`);
 });
 
+test("a URL que o plugin le bate com o nome do repositorio que publica o Pages", () => {
+  // MEDIDO 02/10/2026: o repositorio foi renomeado de `mirror` para `mirrorstream`. A URL
+  // antiga passou a responder 404 e o plugin continuava apontando para ela — o build
+  // passava (o `BASE_PADRAO` e' uma string, nao um caminho), a CI passava, e o aparelho de
+  // quem ja tinha o plugin instalado parava de achar o indice. So quebra no aparelho.
+  const src = fs.readFileSync(path.join(RAIZ, "plugin", "src", "lib", "indice.js"), "utf8");
+  const achado = /const BASE_PADRAO = "https:\/\/[^"]+"/.exec(src);
+  assert.ok(achado, "BASE_PADRAO nao achado em plugin/src/lib/indice.js");
+  const url = achado[0].split('"')[1];
+  const partes = new URL(url).pathname.split("/").filter(Boolean);
+  const noRepo = partes[0] === "mirrorstream";
+  assert.ok(
+    noRepo,
+    `BASE_PADRAO aponta para \`${url}\`, mas o repositorio que publica o Pages chama \`mirrorstream\`. ` +
+    "Se o repo foi renomeado, este valor tem de mudar junto — senao o aparelho pede um indice que responde 404."
+  );
+
+  // e o mesmo endereco tem de estar no README, para ninguem instalar pela URL velha
+  const readme = fs.readFileSync(path.join(RAIZ, "plugin", "README.md"), "utf8");
+  assert.ok(
+    readme.includes(url),
+    `o README do plugin nao cita \`${url}\` — e e' dali que se copia o endereco para instalar`
+  );
+
+  // o workflow precisa publicar no branch que o Pages aceita
+  const publicar = fs.readFileSync(
+    path.join(RAIZ, ".github", "workflows", "publicar-pages.yml"),
+    "utf8"
+  );
+  assert.match(
+    publicar,
+    /branches:\s*\[[^\]]*"gh-pages"/,
+    "o Pages so aceita deploy pela branch gh-pages, entao ela tem de estar no gatilho"
+  );
+  // e ele nao pode citar a URL velha em comentario: comentario mente, mas engana quem le
+  assert.equal(
+    /github\.io\/mirror\//.test(publicar),
+    false,
+    "o workflow ainda cita a URL antiga do Pages (`github.io/mirror/`), que responde 404"
+  );
+});
+
 test("o gerador do indice aponta para o mirrorstream, que e' onde estao as credenciais", () => {
   // Este e' o caminho que derrubou a publicacao: o PADRAO (sem --addon) e' o que a CI usa.
   const src = fs.readFileSync(path.join(RAIZ, "plugin", "tools", "gerar-indice.js"), "utf8");
@@ -330,5 +372,44 @@ test("o Dockerfile e o .dockerignore falam dos tres produtos", () => {
   assert.ok(di.includes("**/node_modules"), "node_modules de um produto entraria na imagem de outro");
   for (const velha of ANTIGAS) {
     assert.equal(di.includes(`${velha}/`), false, `.dockerignore ainda exclui ${velha}/`);
+  }
+});
+test("cada Dockerfile aponta para o endereco do SEU app, e nao o do outro", () => {
+  // No BeamUp o NOME do app E' a URL. Os tres enderecos (o do Pages do plugin e o dos dois
+  // addons) sao coisas diferentes, e trocar um sem trocar o outro nao quebra build nenhum —
+  // so a pagina que dependia dele.
+  const raiz = fs.readFileSync(path.join(RAIZ, "Dockerfile"), "utf8");
+  const view = fs.readFileSync(path.join(RAIZ, "mirrorview", "Dockerfile"), "utf8");
+
+  const urlDo = (texto) => /ENV PUBLIC_BASE_URL=(\S+)/.exec(texto);
+  const ms = urlDo(raiz);
+  const mv = urlDo(view);
+
+  // MEDIDO 02/10/2026: o `mirrorview/Dockerfile` nao tinha a linha. Sem ela o gateway
+  // reescreve o Host para o nome do app, o guard de auto-detect rejeita e as URLs saem
+  // RELATIVAS — que e' a quebra de TV ao vivo que as decisoes 138/139 registram.
+  assert.ok(ms, "o Dockerfile do MirrorStream precisa de PUBLIC_BASE_URL");
+  assert.ok(mv, "o Dockerfile do MirrorView PRECISA de PUBLIC_BASE_URL — sem ela as URLs saem relativas");
+
+  const nome = (u) => new URL(u).hostname.split(".")[0];
+  assert.match(nome(ms[1]), /-mirrorstream$/, `PUBLIC_BASE_URL do MirrorStream aponta para ${ms[1]}`);
+  assert.match(nome(mv[1]), /-mirrorview$/, `PUBLIC_BASE_URL do MirrorView aponta para ${mv[1]}`);
+  assert.notEqual(
+    ms[1],
+    mv[1],
+    "os dois addons estao com o MESMO PUBLIC_BASE_URL — o de TV devolveria URLs do de VOD"
+  );
+
+  // e nenhum dos dois aponta para o endereco antigo. So a linha do `ENV` conta: o
+  // comentario que EXPLICA a renomeacao cita o nome antigo de proposito, e um teste que
+  // acusasse comentario obrigaria a apagar a explicacao do proprio defeito.
+  for (const velho of ["-mirrorhub.", "-mirrorhub2."]) {
+    for (const [nomeArquivo, u] of [["Dockerfile", ms[1]], ["mirrorview/Dockerfile", mv[1]]]) {
+      assert.equal(
+        u.includes(velho),
+        false,
+        `o ${nomeArquivo} ainda aponta para o endereco antigo (${u}) — esse so existe enquanto o app antigo nao for removido`
+      );
+    }
   }
 });
