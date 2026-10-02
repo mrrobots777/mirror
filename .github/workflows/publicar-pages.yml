@@ -72,20 +72,27 @@ jobs:
         working-directory: nuvio
         run: npm ci --no-audit --no-fund
 
-      # O gerador le as credenciais dos paineis de `src/scrapers/xtream.js` do repo do
-      # ADDON. Numa copia do plugin fora do monorepo esse `../src` nao existe, entao o
-      # addon e' clonado. O nome do repo vem de variavel de repositorio (nao e segredo);
-      # sem ela o passo avisa e usa o que ja estiver em `public/idx/`.
+      # O gerador le as credenciais dos paineis de `src/scrapers/xtream.js` do ADDON.
+      #
+      # MEDIDO 02/10/2026 (separacao em tres produtos): o passo clonarava o repo em
+      # `../addon`, e agora `addon/` ja existe DENTRO deste repo — o clone falhava com
+      # "destination path '../addon' already exists and is not an empty directory" e a
+      # publicacao inteira caia. No monorepo o addon ja esta aqui, entao nao ha o que
+      # clonar. A copia do plugin fora do monorepo continua precisando do
+      # `MIRROR_ADDON_REPO`, e e' ai que o clone ainda vale.
       - name: gerar o indice estatico
         working-directory: nuvio
         env:
           MIRROR_ADDON_REPO: ${{ vars.MIRROR_ADDON_REPO }}
         run: |
-          if [ -n "${MIRROR_ADDON_REPO}" ]; then
+          if [ -f ../addon/src/scrapers/xtream.js ]; then
+            echo "addon esta no monorepo (../addon) — nada a clonar"
+            node tools/gerar-indice.js 2>&1 | tee indice.log
+          elif [ -n "${MIRROR_ADDON_REPO}" ]; then
             git clone --depth 1 "https://github.com/${MIRROR_ADDON_REPO}.git" ../addon
             node tools/gerar-indice.js --addon=../addon 2>&1 | tee indice.log
           else
-            echo "::warning::MIRROR_ADDON_REPO vazia — o gerador usa o catalogo que ja estiver em public/idx/ (rode tools/atualizar-indice.yml no repo do addon para renovar)"
+            echo "::warning::sem addon no monorepo e sem MIRROR_ADDON_REPO — o gerador usa o catalogo que ja estiver em public/idx/ (rode tools/atualizar-indice.yml no repo do addon para renovar)"
             node tools/gerar-indice.js 2>&1 | tee indice.log || echo "::warning::gerador falhou — segue com o indice que estava no repositorio"
           fi
           echo "### indice" >> "$GITHUB_STEP_SUMMARY"
