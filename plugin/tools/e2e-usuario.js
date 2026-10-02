@@ -37,15 +37,19 @@ function chaveTmdb() {
 const chave = chaveTmdb();
 if (chave) globalThis.TMDB_API_KEY = chave;
 
-// Ids VERIFICADOS no TMDB com `origin_country` include "KR" e `genres` com 16 — os
-// tres que a fonte precisa para aceitar. Um id errado faz a fonte recusar o titulo e o
-// resultado e' "a fonte quebrou", que e' conclusao errada.
+// Ids VERIFICADOS no TMDB (medido 02/10/2026): conferi `origin_country` include "KR" para os
+// doramas e peguei o `imdb_id` de `/tv/{id}/external_ids`. Um id errado faz a fonte recusar o
+// titulo e o resultado vira "a fonte quebrou", que e' conclusao errada.
+//
+// O `id` e' o do CINEMETA (IMDb), e nao o do TMDB — porque e' esse o caminho real: o dono
+// definiu que o MirrorStream nao tem catalogo, ele e' chamado quando o usuario abre um vod, e
+// o Cinemeta resolve por IMDb. Os ids de TMDB ficam em `idTmdb` so para conferir a origem.
 const CASOS = [
-  { id: "603", tipo: "movie", titulo: "Matrix (1999)", s: null, e: null },
-  { id: "1396", tipo: "tv", titulo: "Breaking Bad S01E01", s: 1, e: 1 },
-  { id: "46260", tipo: "tv", titulo: "Naruto S01E01", s: 1, e: 1 },
-  { id: "67915", tipo: "tv", titulo: "Goblin S01E01 (dorama KR)", s: 1, e: 1 },
-  { id: "112888", tipo: "tv", titulo: "Beleza Verdadeira S01E01", s: 1, e: 1 },
+  { id: "tt0133093", idTmdb: "603", tipo: "movie", conteudo: "filme", titulo: "Matrix (1999)", s: null, e: null },
+  { id: "tt0903747", idTmdb: "1396", tipo: "tv", conteudo: "serie", titulo: "Breaking Bad S01E01", s: 1, e: 1 },
+  { id: "tt0409591", idTmdb: "46260", tipo: "tv", conteudo: "anime", titulo: "Naruto S01E01", s: 1, e: 1 },
+  { id: "tt5994364", idTmdb: "67915", tipo: "tv", conteudo: "dorama", titulo: "Goblin S01E01", s: 1, e: 1 },
+  { id: "tt13274038", idTmdb: "112888", tipo: "tv", conteudo: "dorama", titulo: "Beleza Verdadeira S01E01", s: 1, e: 1 },
 ];
 
 async function provaLink(url) {
@@ -78,10 +82,12 @@ async function main() {
     resumo[chaveFonte] = { ok: 0, vazio: 0, erro: 0, morreu: 0 };
     console.log(`\n### ${chaveFonte.toUpperCase()} — ${f.descricao}`);
     for (const caso of CASOS) {
-      // A fonte so e' chamada quando o conteudo bate com o que ela promete.
-      const conteudo = caso.titulo.includes("dorama") ? "dorama"
-        : caso.id === "46260" ? "anime"
-        : caso.tipo === "movie" ? "filme" : "serie";
+      // A fonte so e' chamada quando o conteudo bate com o que ela promete. O `conteudo` e'
+      // DECLARADO no caso, e nao deduzido do id: quando o id era o de TMDB, a deduziao vivia
+      // no id (`caso.id === "46260"` -> anime) e passou a classificar Naruto como serie depois
+      // que o id virou IMDb `tt0409591` — as 4 fontes de anime sairam do relatorio com "vazio 0"
+      // sem nunca terem sido chamado. Um relatorio que filtra errado e' pior que nenhum.
+      const conteudo = caso.conteudo;
       if (!f.conteudos.includes(conteudo)) {
         console.log(`  - ${caso.titulo}: fora do conteudo da fonte (${f.conteudos.join("/")}) — nao chamada`);
         continue;

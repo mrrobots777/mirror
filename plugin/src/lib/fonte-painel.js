@@ -86,11 +86,12 @@ async function titulosDe(id, isTv, season, episode) {
   return saida;
 }
 
-function idDe(valor) {
-  const bruto = String(valor == null ? "" : valor).trim().replace(/^tmdb:/i, "");
-  const limpo = bruto.replace(/:\d+:\d+$/, "").replace(/[^0-9]/g, "");
-  return limpo || null;
-}
+// MEDIDO 02/10/2026: isto servia BLZ, SPC e ATO e tinha o mesmo defeito das outras 4 fontes —
+// `tt0133093` virava `0133093`, que o TMDB resolve como **"Strings" (2012)**. O log dizia o
+// defeito inteiro: `[BLZ] 1584 item(s) lidos, nenhum casa com "Strings" — [] de proposito`.
+// Este e' o `idDe` que o painel usa, entao a correcao e' aqui. Ver `src/lib/id-de-conteudo.js`.
+const { idDe } = require("./id-de-conteudo");
+const { tmdbIdDe } = require("./tmdb");
 
 function idiomaDe(nome) {
   const n = normalizeLoose(nome);
@@ -266,9 +267,14 @@ async function primeiroQueEntrega(painel, st, o, ns) {
 function criaFonte(painel, opcoes) {
   const o = opcoes || {};
   return async function getStreams(tmdbId, mediaType, season, episode, estado) {
-    const id = idDe(tmdbId);
-    if (!id) return [];
     const isTv = String(mediaType || "").toLowerCase() === "tv";
+    // MEDIDO 02/10/2026: o caminho do dono e' o id do **Cinemeta** (`tt0133093`), porque o
+    // MirrorStream nao tem catalogo — ele e' chamado quando o usuario abre um vod. O `idDe`
+    // abaixo so' aceita TMDB, entao o IMDb e' resolvido AQUI, antes de qualquer consulta ao
+    // painel. Antes desta linha, `tt0133093` virava `0133093` e o painel era consultado pelo
+    // filme errado: o log dizia `[BLZ] nenhum casa com "Strings" — [] de proposito`.
+    const id = await tmdbIdDe(tmdbId, isTv);
+    if (!id) return [];
     const p = novo(TETO_MS);
     let meta = null;
     try {

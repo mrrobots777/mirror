@@ -173,6 +173,37 @@ test(
   }
 );
 
+test("a branch gerada nao carrega arquivo de dado/cache (eles mudam a cada boot)", () => {
+  // MEDIDO 02/10/2026: `gerar-branch-mirrorview.js` faz `cp -R` de TUDO que esta na pasta
+  // `mirrorview/`, e o passo seguinte e' `git add -A` no worktree. O `.gitignore` da RAIZ
+  // (`*.db`, `*.db-shm`, `*.db-wal`) protege o repositorio, mas NAO protege o worktree: o
+  // arquivo ja foi copiado para dentro dele, la nao existe `.gitignore`, e `git add -A`
+  // versiona o `cache.db`.
+  //
+  // O efeito e' pior do que "sobra um arquivo": o SQLite muda a cada boot do servidor, entao o
+  // hash do blob muda a cada geracao. O teste `a branch publicada bate com a pasta` fica
+  // VERMELHO sozinho, sem ninguem ter editado nada:
+  //
+  //     soNaGerada:    cache.db:e3d2f9f0…  cache.db-shm:f7d51922…  cache.db-wal:9520f0a4…
+  //     soNaPublicada: cache.db:da63a52b…  cache.db-shm:80ec5217…  cache.db-wal:f9961a72…
+  //
+  // E o pior detalhe: eu rodei o servidor para medir e fui EU que criei o arquivo. Um
+  // artefato de medicao entrou no branch de producao do outro produto.
+  const gerada = geraRascunho();
+  const arquivos = cp
+    .execSync(`git ls-tree -r --name-only ${gerada}`, { cwd: RAIZ, encoding: "utf8" })
+    .split("\n")
+    .filter(Boolean);
+  const dados = arquivos.filter((f) => /\.(db|db-shm|db-wal|sqlite|sqlite3|log)$/i.test(f));
+  assert.deepStrictEqual(
+    dados,
+    [],
+    `a branch carrega arquivo de dado/cache: ${dados.join(", ")} — o conteudo muda a cada boot, ` +
+      `entao o hash muda a cada geracao e o teste de divergencia fica vermelho sozinho. ` +
+      `O gerador tem de pular o que o .gitignore ignora.`
+  );
+});
+
 test(
   "a branch mirrorview publicada tem o produto na raiz",
   { skip: !temBranch(BRANCH) && "a branch ainda nao foi gerada" },

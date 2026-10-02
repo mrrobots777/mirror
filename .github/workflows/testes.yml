@@ -60,12 +60,17 @@ jobs:
             node -c "$f"
           done
 
-      - name: sintaxe do worker (e modulo ESM, entao o Node CommonJS nao le)
+      - name: sintaxe dos workers (sao modulos ESM, entao o Node CommonJS nao le)
+        # `worker-borda.mjs` ja e' ESM pela extensao, entao o `node --check` direto nele
+        # funciona. O `worker-simple.js` e' ESM DENTRO de um `.js`, entao precisa da copia
+        # para `.mjs` — foi por isso que este passo existe: a primeira versao do arquivo
+        # passou `worker-simple.js` direto no `node -c` e a CI caiu com SyntaxError.
         run: |
           set -e
           cp worker-simple.js /tmp/worker-check.mjs
           node --check /tmp/worker-check.mjs
           rm -f /tmp/worker-check.mjs
+          node --check worker-borda.mjs
 
       # As tres barreiras. A do repo cobre o que e' dos TRES produtos (worker, segredos,
       # e o teste que sobe cada servidor de verdade).
@@ -98,7 +103,7 @@ jobs:
           repo=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
           total=$((ms + mv + repo))
           echo "mirrorstream: $ms | mirrorview: $mv | repo: $repo | total: $total"
-          if [ "$total" -lt 317 ]; then
-            echo "a barra de testes caiu (esperado 317 ou mais)"
+          if [ "$total" -lt 330 ]; then
+            echo "a barra de testes caiu (esperado 330 ou mais)"
             exit 1
           fi

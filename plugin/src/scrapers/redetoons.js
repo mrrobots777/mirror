@@ -13,10 +13,10 @@ const CONTRATO = 3;
 const MS = 8e3;
 const PEDIDO = { Referer: REFERER, "User-Agent": UA };
 
-function idDe(valor) {
-  const bruto = String(valor == null ? "" : valor).trim().replace(/^tmdb:/i, "");
-  return bruto.replace(/[^0-9]/g, "") || null;
-}
+// MEDIDO 02/10/2026: ver `src/lib/id-de-conteudo.js`. O `replace(/[^0-9]/g, "")` de antes
+// transformava `tt0133093` (The Matrix) em `0133093`, que o TMDB resolve como "Strings" (2012).
+const { idDe } = require("../lib/id-de-conteudo");
+const { tmdbIdDe } = require("../lib/tmdb");
 
 async function indice() {
   const r = await pegarJson(INDICE, { ms: MS, headers: PEDIDO });
@@ -56,9 +56,11 @@ async function provaDeVida(url) {
 }
 
 module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
-  const id = idDe(tmdbId);
-  if (!id) return [];
   const isTv = String(mediaType || "").toLowerCase() === "tv";
+  // MEDIDO 02/10/2026: o id do caminho real do dono e' IMDb (`tt0133093`), porque o usuario
+  // abre um vod do Cinemeta. Antes, virava `0133093` e a fonte consultava "Strings" (2012).
+  const id = await tmdbIdDe(tmdbId, isTv);
+  if (!id) return [];
   const s = Number(season) || 1;
   const e = Number(episode) || 1;
   let portao = null;

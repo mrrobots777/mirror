@@ -100,3 +100,40 @@ test("o .dockerignore nao vaza o node_modules do plugin nem o mirrorview", () =>
     "mirrorview/ nao pode estar no .dockerignore — o mirrorview/Dockerfile copia dela"
   );
 });
+test("cada worker tem o seu config, e o da borda e' um arquivo proprio", () => {
+  // MEDIDO 02/10/2026: eu sobrescrevi o `wrangler.toml` (que e' o do worker GENERICO, e
+  // documenta o `[placement] region = "aws:sa-east-1"` da decisao 123) com o config do worker
+  // DE BORDA, e `timers.test.js` acusou na hora. Sao dois workers diferentes, com cotas
+  // diferentes (o plano gratis da Cloudflare da cota POR WORKER) — um config so seria uma
+  // fonte de confusao e de publicacao no lugar errado.
+  const borda = fs.readFileSync(path.join(RAIZ, "wrangler-borda.toml"), "utf8");
+  assert.match(borda, /main\s*=\s*"worker-borda\.mjs"/, "o config da borda tem de apontar pro worker da borda");
+  assert.match(borda, /name\s*=\s*"mirror-borda"/);
+  assert.match(borda, /ORIGEM\s*=\s*"https:\/\/e75602c18409-mirror/, "a origem tem de ser um dos dois addons");
+
+  // E o worker da borda tem que existir de verdade, no caminho que o config declara.
+  const main = /main\s*=\s*"([^"]+)"/.exec(borda)[1];
+  assert.ok(
+    fs.existsSync(path.join(RAIZ, main)),
+    `o \`main\` do config da borda aponta para ${main}, que nao existe`
+  );
+
+  // Os dois workers nao podem ter o mesmo nome (a Cloudflare trataria como um so).
+  const generico = fs.readFileSync(path.join(RAIZ, "wrangler.toml"), "utf8");
+  const nomeBorda = /name\s*=\s*"([^"]+)"/.exec(borda)[1];
+  const nomeGenerico = /name\s*=\s*"([^"]+)"/.exec(generico)[1];
+  assert.notStrictEqual(nomeBorda, nomeGenerico, "os dois workers precisam de nomes diferentes");
+});
+
+test("o worker da borda e' ESM e passa na checagem de sintaxe do CI", () => {
+  // O CI roda `node --check` num `.mjs` copiado, porque `node -c` em CommonJS da SyntaxError
+  // num arquivo que e' ESM — e a propria CI ja caiu uma vez por isso.
+  const worker = path.join(RAIZ, "worker-borda.mjs");
+  assert.ok(fs.existsSync(worker), "worker-borda.mjs");
+  assert.match(fs.readFileSync(worker, "utf8"), /export default/, "o worker tem que exportar `fetch`");
+  assert.match(
+    fs.readFileSync(worker, "utf8"),
+    /export function classifica/,
+    "`classifica` tem que ser exportada: e' a funcao pura que `test/worker-borda.test.js` exercita sem rede"
+  );
+});

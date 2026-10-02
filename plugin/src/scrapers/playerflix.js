@@ -12,10 +12,12 @@ const SIGLA = "SPT";
 const MS = 8e3;
 const PEDIDO = { Referer: REFERER, "X-Requested-With": "XMLHttpRequest", "User-Agent": UA };
 
-function idDe(valor) {
-  const bruto = String(valor == null ? "" : valor).trim().replace(/^tmdb:/i, "");
-  return bruto.replace(/[^0-9]/g, "") || null;
-}
+// MEDIDO 02/10/2026: isto era `replace(/[^0-9]/g, "")`, que transformava o id do Cinemeta
+// `tt0133093` (The Matrix) em `0133093` — o TMDB resolve esse numero como **"Strings" (2012)**.
+// A fonte buscava o filme errado, nao casava com nada e devolvia `[]` SEM ERRO. Ver
+// `src/lib/id-de-conteudo.js` para a medicao completa.
+const { idDe } = require("../lib/id-de-conteudo");
+const { tmdbIdDe } = require("../lib/tmdb");
 
 async function metaDe(id, isTv) {
   const chave = globalThis.TMDB_API_KEY;
@@ -79,9 +81,12 @@ async function videoDe(embed) {
 }
 
 module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
-  const id = idDe(tmdbId);
-  if (!id) return [];
   const isTv = String(mediaType || "").toLowerCase() === "tv";
+  // O caminho real do dono: o usuario abre um vod do Cinemeta e o id que chega e' `tt0133093`
+  // (medido 02/10/2026). `idDe` so' aceita TMDB, entao o IMDb e' resolvido aqui — sem isto a
+  // fonte consultava "Strings" (2012) no lugar de "The Matrix" e devolvia `[]` sem erro.
+  const id = await tmdbIdDe(tmdbId, isTv);
+  if (!id) return [];
   const s = Number(season) || 1;
   const e = Number(episode) || 1;
   const meta = await metaDe(id, isTv);

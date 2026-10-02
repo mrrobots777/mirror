@@ -79,11 +79,35 @@ roda(`git worktree add --detach ${ARVORE} HEAD`);
 //    isso e o teste `a branch NAO contem os outros dois produtos` pegou.
 cp.execSync(`git -C ${ARVORE} rm -rq -f .`, { stdio: "ignore" });
 
+// O git e' quem decide o que entra na branch. `git check-ignore` responde pelo `.gitignore`
+// de verdade — inclusive as regras ancoradas e as excecoes com `!` — entao o gerador nao
+// mantem uma segunda lista que divergiria na proxima regra nova.
+const ignoradoPorGit = (caminho) => {
+  const r = cp.spawnSync("git", ["check-ignore", "-q", "--", caminho], { cwd: RAIZ });
+  // 0 = ignorado, 1 = nao ignorado, 128 = erro (caminho inexistente, etc).
+  return r.status === 0;
+};
+
 // 4. o produto vai para a RAIZ da branch
 for (const nome of fs.readdirSync(PASTA)) {
   if (nome === "Dockerfile") continue; // o Dockerfile da raiz seria sobrescrito
   if (nome === "node_modules") continue;
   if (nome.startsWith(".")) continue;
+  // MEDIDO 02/10/2026: `cp -R` de tudo, sem olhar o `.gitignore`, copia para o worktree o
+  // `cache.db` que o servidor cria a cada boot — e la dentro NAO existe `.gitignore`, entao o
+  // `git add -A` do passo 8 versiona o arquivo. Como o SQLite muda a cada boot, o hash do blob
+  // mudava a cada geracao e o teste `a branch publicada bate com a pasta` ficava vermelho
+  // SOZINHO, sem ninguem ter editado nada:
+  //
+  //     soNaGerada:    cache.db:e3d2f9f0…   soNaPublicada: cache.db:da63a52b…
+  //
+  // A pergunta "esse arquivo entra na branch?" tem uma unica fonte de verdade no git — e o
+  // proprio `git check-ignore`. Consultar a lista de padroes aqui seria uma segunda copia do
+  // `.gitignore`, que e' como os dois divergem na proxima regra nova.
+  if (ignoradoPorGit(path.join(PASTA, nome))) {
+    console.log(`  [pulado] ${nome} (ignorado pelo .gitignore)`);
+    continue;
+  }
   cp.execSync(`cp -R ${JSON.stringify(path.join(PASTA, nome))} ${JSON.stringify(ARVORE + "/" + nome)}`);
 }
 

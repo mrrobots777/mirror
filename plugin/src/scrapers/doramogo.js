@@ -15,10 +15,10 @@ const SIGLA = "DGO";
 const MS = 8e3;
 const PEDIDO = { Referer: REFERER, "User-Agent": UA };
 
-function idDe(valor) {
-  const bruto = String(valor == null ? "" : valor).trim().replace(/^tmdb:/i, "");
-  return bruto.replace(/[^0-9]/g, "") || null;
-}
+// MEDIDO 02/10/2026: ver `src/lib/id-de-conteudo.js`. O `replace(/[^0-9]/g, "")` de antes
+// transformava `tt0133093` (The Matrix) em `0133093`, que o TMDB resolve como "Strings" (2012).
+const { idDe } = require("../lib/id-de-conteudo");
+const { tmdbIdDe } = require("../lib/tmdb");
 
 async function metaDe(id) {
   const chave = globalThis.TMDB_API_KEY;
@@ -132,7 +132,9 @@ async function pagina(url) {
 
 module.exports.getStreams = async (tmdbId, mediaType, season, episode) => {
   if (String(mediaType || "").toLowerCase() !== "tv") return [];
-  const id = idDe(tmdbId);
+  // MEDIDO 02/10/2026: o caminho real do dono e' o id IMDb do Cinemeta (`tt0133093`). `idDe`
+// so' aceita TMDB, entao o IMDb e' resolvido aqui. `false` porque DGO so' serve serie.
+const id = await tmdbIdDe(tmdbId, false);
   if (!id) return [];
   const s = Number(season) || 1;
   const e = Number(episode) || 1;
