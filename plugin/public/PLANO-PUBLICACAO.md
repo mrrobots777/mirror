@@ -81,22 +81,21 @@ O gerador lê as **credenciais de `src/scrapers/xtream.js`** (repo do addon) e *
 os literais de `src/<fonte>/index.js`**. Se divergirem, ele **para com erro** — não publica
 índice com credencial errada.
 
-Para rodar contra um clone do addon: `node tools/gerar-indice.js --addon=../addon`.
+Para rodar contra um clone do addon: `node tools/gerar-indice.js --addon=../mirrorstream`.
 
 ## 4. Automatizar
 
-`tools/atualizar-indice.yml` é o workflow de GitHub Actions: roda o gerador **a cada 6 h**,
-confere que nenhum shard passou de 1 MB, roda o build e faz commit no repositório **do
-plugin** (nunca no do addon). Configure duas **Actions Variables**:
+O workflow real é **`.github/workflows/publicar-pages.yml`** (raiz do monorepo): roda o
+gerador, confere que nenhum shard passou de 1 MB, roda o build e publica no GitHub Pages.
+A única Actions Variable que ele usa é `MIRROR_ADDON_REPO`, e só para o caso do plugin viver
+**fora** do monorepo — dentro daqui o addon de VOD é `mirrorstream/` e não há o que clonar.
 
-| variável | valor |
-|---|---|
-| `MIRROR_PLUGIN_REPO` | `owner/repo` do **plugin** |
-| `MIRROR_PLUGIN_BRANCH` | branch do plugin (default `main`) |
-| `MIRROR_ADDON_REPO` | `owner/repo` do **addon** (opcional — sem ela usa os defaults em `src/scrapers/xtream.js`) |
-
-> Este workflow **não foi executado nem publicado** nesta tarefa. Copie-o para
-> `.github/workflows/atualizar-indice.yml` no repositório do plugin.
+> MEDIDO 02/10/2026: existiam duas cópias deste workflow em `plugin/tools/*.yml` (138 e 118
+> linhas) que o GitHub **nunca executou** — Actions só lê `.github/workflows/`. Elas só
+> divergiam do real e mandavam o gerador procurar credenciais em `../addon`, que já não
+> existe. É por isso que a publicação caiu com `ENOENT .../addon/src/scrapers/xtream.js`
+> logo depois de o addon virar `mirrorstream/`. Estavam apagadas quando o gerador passou a
+> ler `../mirrorstream`.
 
 ## 5. Se o índice ficar velho
 

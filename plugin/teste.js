@@ -16,7 +16,7 @@ function chaveTmdb() {
   const env = process.env.TMDB_API_KEY;
   if (env && String(env).trim()) return String(env).trim();
   try {
-    const { ENV } = require(path.join(raiz, "..", "addon", "src", "core", "nomes.js"));
+    const { ENV } = require(path.join(raiz, "..", "mirrorstream", "src", "core", "nomes.js"));
     if (ENV.TMDB_API_KEY && String(ENV.TMDB_API_KEY).trim()) return String(ENV.TMDB_API_KEY).trim();
   } catch (_) {}
   const padroes = [
@@ -25,9 +25,9 @@ function chaveTmdb() {
     /TMDB_API_KEY["']?\s*:\s*["']([^"']+)["']/,
   ];
   const candidatos = [
-    path.join(raiz, "..", "addon", ".env.example"),
-    path.join(raiz, "..", "addon", "src", "scrapers", "tmdb.js"),
-    path.join(raiz, "..", "addon", "ecosystem.config.js"),
+    path.join(raiz, "..", "mirrorstream", ".env.example"),
+    path.join(raiz, "..", "mirrorstream", "src", "scrapers", "tmdb.js"),
+    path.join(raiz, "..", "mirrorstream", "ecosystem.config.js"),
   ];
   for (const arquivo of candidatos) {
     try {

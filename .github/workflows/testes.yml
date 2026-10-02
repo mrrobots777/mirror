@@ -98,7 +98,7 @@ jobs:
           repo=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
           total=$((ms + mv + repo))
           echo "mirrorstream: $ms | mirrorview: $mv | repo: $repo | total: $total"
-          if [ "$total" -lt 286 ]; then
-            echo "a barra de testes caiu (esperado 286 ou mais)"
+          if [ "$total" -lt 294 ]; then
+            echo "a barra de testes caiu (esperado 294 ou mais)"
             exit 1
           fi

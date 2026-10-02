@@ -89,8 +89,8 @@ jobs:
             echo "o MirrorStream esta no monorepo (../mirrorstream) — nada a clonar"
             node tools/gerar-indice.js 2>&1 | tee indice.log
           elif [ -n "${MIRROR_ADDON_REPO}" ]; then
-            git clone --depth 1 "https://github.com/${MIRROR_ADDON_REPO}.git" ../addon
-            node tools/gerar-indice.js --addon=../addon 2>&1 | tee indice.log
+            git clone --depth 1 "https://github.com/${MIRROR_ADDON_REPO}.git" ../mirrorstream
+            node tools/gerar-indice.js --addon=../mirrorstream 2>&1 | tee indice.log
           else
             echo "::warning::sem addon no monorepo e sem MIRROR_ADDON_REPO — o gerador usa o catalogo que ja estiver em public/idx/"
             node tools/gerar-indice.js 2>&1 | tee indice.log || echo "::warning::gerador falhou — segue com o indice que estava no repositorio"
@@ -130,7 +130,7 @@ jobs:
       # SO `plugin/public/` vai como artefato. `dist/`, `src/`, `node_modules/` e
       # `tools/` sao do build e do repositorio, nao do que o Nuvio lê.
       #
-      # O CAMINHO PRECISA SER `nuvio/public`, E NAO `public`: este passo NAO tem
+      # O CAMINHO PRECISA SER `plugin/public`, E NAO `public`: este passo NAO tem
       # `working-directory`, entao `public` resolveria a partir da RAIZ do repo — que e'
       # a UI do addon (install.html, dashboard.html, tv.html, logo.svg). Medido
       # 02/10/2026: o deploy passava, o artefato saia com 4 paginas e nenhum

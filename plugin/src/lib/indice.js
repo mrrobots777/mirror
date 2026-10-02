@@ -12,10 +12,10 @@ const BASE_PADRAO = "https://mrrobots777.github.io/mirror";
 
 const SEM_INDEX = [
   "indice estatico indisponivel (404/erro ao ler o shard).",
-  "o plugin so descobre o id do stream pelo indice: publica nuvio/public/ no GitHub Pages",
+  "o plugin so descobre o id do stream pelo indice: publica plugin/public/ no GitHub Pages",
   "(a raiz `public/` vai junto com o manifest.json) e aponta este endereco:",
   BASE_PADRAO,
-  "para gerar: node tools/gerar-indice.js | para publicar: nuvio/tools/atualizar-indice.yml",
+  "para gerar: node tools/gerar-indice.js | para publicar: .github/workflows/publicar-pages.yml",
   "enquanto isso a fonte devolve [] de proposito — nunca inventar stream."
 ].join(" ");
 

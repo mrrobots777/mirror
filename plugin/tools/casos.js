@@ -9,7 +9,7 @@ function chaveTmdb() {
   const env = process.env.TMDB_API_KEY;
   if (env && String(env).trim()) return String(env).trim();
   try {
-    const { ENV } = require("../../addon/src/core/nomes.js");
+    const { ENV } = require("../../mirrorstream/src/core/nomes.js");
     if (ENV.TMDB_API_KEY && String(ENV.TMDB_API_KEY).trim()) return String(ENV.TMDB_API_KEY).trim();
   } catch (_) {}
   const padrao = /TMDB_API_KEY\s*=\s*["']?([0-9a-zA-Z_-]{20,})["']?/;

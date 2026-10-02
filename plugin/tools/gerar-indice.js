@@ -16,7 +16,10 @@ const DIRETO = args.includes("--direto");
 const ARG_ADDON = (args.find((a) => a.startsWith("--addon=")) || "").split("=")[1] || "";
 // `--addon=<dir>` aponta para um clone do repo do addon. Sem ele, usa o `addon/src` do
 // monorepo. O workflow de publicacao clona o addon e roda daqui dentro do `plugin/`.
-const ADDON = ARG_ADDON ? path.resolve(RAIZ, ARG_ADDON, "src") : path.join(RAIZ, "..", "addon", "src");
+// MEDIDO 02/10/2026: este era o ultimo `addon/` do repo. O addon de VOD virou
+// `mirrorstream/`, e a publicacao falhou com "ENOENT .../addon/src/scrapers/xtream.js" — o
+// gerador nao achava as credenciais dos paineis e nao gerava indice nenhum.
+const ADDON = ARG_ADDON ? path.resolve(RAIZ, ARG_ADDON, "src") : path.join(RAIZ, "..", "mirrorstream", "src");
 const SAIDA = process.env.IDICE_SAIDA || path.join(RAIZ, "public", "idx");
 const SO = (args.find((a) => !a.startsWith("--")) || "").trim().toLowerCase();
 const ALVO = (() => {
