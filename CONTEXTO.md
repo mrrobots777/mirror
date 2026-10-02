@@ -1429,8 +1429,57 @@ REI) e `logo` vazio. Corrigido com o valor do app novo.
 
 ### O que continua Depending de ação sua
 
-Remover os dois apps antigos do BeamUp (`mirrorhub` e `mirrorhub2`) **depois** que os novos
-responderem 200 — é operação de produção, e a conta é sua.
+**O acesso SSH ao BeamUp caiu** — e não tem nada a ver com a renomeação. A chave
+`id_ed25519_mirror` (`SHA256:uYVkIU38nE1wTbpTOyFn4ruZF4Iqttzcf6RByP9HMbk`) é recusada
+**também no app antigo**, com `Authentications that can continue: publickey` e nada mais:
+
+```
+$ ssh -v -o BatchMode=yes dokku@a.baby-beamup.club
+Offering public key: /home/ubuntu/.ssh/id_ed25519_mirror ED25519 SHA256:uYVkIU38...
+Authentications that can continue: publickey
+dokku@a.baby-beamup.club: Permission denied (publickey).
+```
+
+Já tinha acontecido uma vez (decisão 150, "o vínculo do SSH do BeamUp também caiu no meio da
+sessão"), então **não assuma que deploy quebrou** quando este erro aparece: teste o app
+antigo também antes de concluir qualquer coisa. O agente **não tem** o token da CLI, então
+não consegue se ressuscitar sozinho — `beamup config` exige login.
+
+**Para destravar (na sua máquina, com a CLI autenticada):**
+
+```bash
+beamup config a.baby-beamup.club devavmirror   # ressincroniza a chave SSH
+```
+
+**Depois disso, o deploy é dois pushes** (o push para um path novo **cria** o app — foi assim
+que `mirrorhub2` nasceu; a CLI não tem `create`, e `delete` é o único comando de remoção):
+
+```bash
+git remote add beamup-ms dokku@a.baby-beamup.club:e75602c18409/mirrorstream
+git remote add beamup-mv dokku@a.baby-beamup.club:e75602c18409/mirrorview
+
+git push --force beamup-ms HEAD:master   # MirrorStream  (VOD)
+git push --force beamup-mv HEAD:master   # MirrorView    (TV)
+```
+
+**Os dois remotes já estão criados no repositório** — os dois comandos acima estão prontos
+para rodar, e o `git push` já foi tentado e **falhou só no acesso**, não no código.
+
+**Endereços que os apps novos vão ter** (o nome do app **é** a URL, e o `PUBLIC_BASE_URL` dos
+dois Dockerfiles já está com estes valores):
+
+```
+https://e75602c18409-mirrorstream.baby-beamup.club     (VOD)
+https://e75602c18409-mirrorview.baby-beamup.club       (TV)
+```
+
+**Só remova os antigos depois que os novos responderem 200** (`beamup delete`, um por app).
+A ordem importa: remover antes deixa a instalação do Nuvio sem servidor de TV por um tempo,
+e o `/catalog/tv/*` vazio é pior do que uma URL antiga no ar.
+
+**O que já está pronto e verificado:** GitHub renomeado (`mirrorstream`), CI verde
+(`testes` success), Pages no ar em `github.io/mirrorstream/` com `name: MirrorStream`,
+11 fontes e `indice.json` 200. O único item bloqueado é o push ao BeamUp.
 
 ## A separação em três produtos — 02/10/2026
 
