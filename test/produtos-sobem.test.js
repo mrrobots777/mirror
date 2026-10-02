@@ -20,9 +20,10 @@ const os = require("node:os");
 const RAIZ = path.join(__dirname, "..");
 
 // Cada produto: o servidor e a frase que so ele escreve quando subiu de verdade.
+// plugin/ NUNCA entra aqui: ele nao e' um servidor, roda dentro do app do Nuvio.
 const PRODUTOS = [
-  { chave: "addon", dir: "addon", nome: "Mirror (catálogo para o Nuvio)" },
-  { chave: "stremio", dir: "stremio", nome: "Mirror Stremio (catálogo + player)" }
+  { chave: "mirrorstream", dir: "mirrorstream", nome: "MirrorStream (filmes e series: catalogo + player)", soVod: true },
+  { chave: "mirrorview", dir: "mirrorview", nome: "MirrorView (TV ao vivo: 4 fontes, guia e catalogo)", soTv: true }
 ];
 
 function sobe(produto, porta) {
@@ -71,8 +72,8 @@ for (const produto of PRODUTOS) {
 test("os tres produtos tem onde viver, e nenhum se sobrepoe ao outro", () => {
   // `nuvio/` (plugin) nao tem `server.js`: ele roda DENTRO do app, e um `server.js`
   // la dentro seria um produto a mais sem dono.
-  assert.ok(fs.existsSync(path.join(RAIZ, "nuvio", "src", "core", "fontes.js")), "nuvio/ sumiu");
-  assert.ok(!fs.existsSync(path.join(RAIZ, "nuvio", "server.js")), "nuvio/ nao e' um servidor");
+  assert.ok(fs.existsSync(path.join(RAIZ, "plugin", "src", "core", "fontes.js")), "plugin/ sumiu");
+  assert.ok(!fs.existsSync(path.join(RAIZ, "plugin", "server.js")), "plugin/ nao e' um servidor");
   for (const p of PRODUTOS) {
     assert.ok(fs.existsSync(path.join(RAIZ, p.dir, "src", "server.js")), `${p.dir}/src/server.js ausente`);
     assert.ok(fs.existsSync(path.join(RAIZ, p.dir, "public", "install.html")), `${p.dir}/public/install.html ausente`);
@@ -80,7 +81,7 @@ test("os tres produtos tem onde viver, e nenhum se sobrepoe ao outro", () => {
   }
 });
 
-test("os dois addons tem id DIFERENTE (nao podem conviver no mesmo app)", () => {
+test("os tres produtos tem identidade propria e os ids nao batem", () => {
   // Dois addons com o mesmo `id` nao sao dois addons: o segundo sobrescreve o primeiro
   // na lista, e o usuario perde um dos dois sem nenhuma mensagem.
   const id = (dir) => {
@@ -91,11 +92,14 @@ test("os dois addons tem id DIFERENTE (nao podem conviver no mesmo app)", () => 
     const m = src.match(/id:\s*"(com\.[a-z]+\.[a-z]+)"/);
     return m ? m[1] : null;
   };
-  const a = id("addon");
-  const s = id("stremio");
-  assert.ok(a, "o addon nao declara id com.mirror.*");
-  assert.ok(s, "o stremio nao declara id com.mirror.*");
-  assert.notStrictEqual(a, s, `os dois usam ${a} — um sobrescreve o outro`);
+  const a = id("mirrorstream");
+  const s = id("mirrorview");
+  assert.ok(a, "o MirrorStream nao declara id com.<marca>.<produto>");
+  assert.ok(s, "o MirrorView nao declara id com.<marca>.<produto>");
+  assert.notStrictEqual(a, s, `os dois usam ${a} — um sobrescreve o outro na lista`);
+  // o plugin tambem tem nome, e' o que o Nuvio mostra em Settings -> Plugins
+  const fontes = require("/home/ubuntu/mirror/plugin/src/core/fontes.js");
+  assert.strictEqual(fontes.NOME_REPOSITORIO, "MirrorStream", "o plugin se chama MirrorStream");
 });
 
 test("cada servidor resolve `public/` pelo modulo, nao pelo diretorio de execucao", () => {
@@ -111,11 +115,11 @@ test("cada servidor resolve `public/` pelo modulo, nao pelo diretorio de execuca
   }
 });
 
-test("o Dockerfile da raiz constroi o addon e aponta para a pasta certa", () => {
+test("o Dockerfile da raiz constroi o MirrorStream e aponta para a pasta certa", () => {
   const df = fs.readFileSync(path.join(RAIZ, "Dockerfile"), "utf8");
-  assert.match(df, /COPY addon\/package\*\.json/, "o npm ci precisa do package.json do addon");
-  assert.match(df, /COPY addon\/beamup-start\.js \/start/, "o /start do BeamUp esta em addon/");
-  assert.match(df, /CMD \["node", "addon\/src\/server\.js"\]/, "o CMD tem de apontar para addon/src");
+  assert.match(df, /COPY mirrorstream\/package\*\.json/, "o npm ci precisa do package.json do MirrorStream");
+  assert.match(df, /COPY mirrorstream\/beamup-start\.js \/start/, "o /start do BeamUp esta em mirrorstream/");
+  assert.match(df, /CMD \["node", "mirrorstream\/src\/server\.js"\]/, "o CMD tem de apontar para mirrorstream/src");
   assert.ok(!/CMD \["node", "src\/server\.js"\]/.test(df), "o CMD ainda aponta para a raiz");
   // O `.dockerignore` precisa nao vazar o `node_modules` do plugin para a imagem do addon.
   const di = fs.readFileSync(path.join(RAIZ, ".dockerignore"), "utf8");

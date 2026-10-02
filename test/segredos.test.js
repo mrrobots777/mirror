@@ -21,8 +21,8 @@ const { execFileSync } = require("node:child_process");
 // Este teste e' DO REPO, nao de um produto: o `.gitignore` protege os tres (nuvio/,
 // addon/ e stremio/) ao mesmo tempo. O `src/server.js`, esse sim, e' do addon.
 const raiz = path.join(__dirname, "..");
-const ADDON = path.join(raiz, "addon");
-const nomes = require("../addon/src/core/nomes");
+const MS = path.join(raiz, "mirrorstream");
+const nomes = require("../mirrorstream/src/core/nomes");
 
 function arquivosVersionados() {
   try {
@@ -63,7 +63,7 @@ test("segredos: toda variável com cara de credencial está marcada no registro 
 
 test("segredos: o /health mostra o estado das credenciais e nunca o valor", () => {
   const fs2 = require("node:fs");
-  const server = fs2.readFileSync(path.join(ADDON, "src", "server.js"), "utf8");
+  const server = fs2.readFileSync(path.join(MS, "src", "server.js"), "utf8");
   assert.match(server, /credenciais: credenciaisNoAr\(\)/, "o /health tem que mostrar o estado das credenciais");
   assert.match(server, /function credenciaisNoAr\(\)/, "a funcao que monta o estado");
   // O ponto inteiro: estado, nunca conteudo.

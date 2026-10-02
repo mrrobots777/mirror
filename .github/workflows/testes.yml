@@ -28,18 +28,18 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: |
-            addon/package-lock.json
-            stremio/package-lock.json
+            mirrorstream/package-lock.json
+            mirrorview/package-lock.json
 
       # O repo tem TRES produtos: `nuvio/` (plugin), `addon/` (catalogo para o Nuvio)
       # e `stremio/` (addon Stremio). Cada um tem o seu package.json e as suas deps.
-      - name: instala as dependencias (addon)
+      - name: instala as dependencias (mirrorstream)
         run: npm ci --no-audit --no-fund
-        working-directory: addon
+        working-directory: mirrorstream
 
-      - name: instala as dependencias (stremio)
+      - name: instala as dependencias (mirrorview)
         run: npm ci --no-audit --no-fund
-        working-directory: stremio
+        working-directory: mirrorview
 
       - name: sintaxe do servidor e do scraper (CommonJS)
         # O worker NAO entra aqui: ele e modulo ESM (`export default`) e o `node -c` do
@@ -47,16 +47,16 @@ jobs:
         # propria CI caiu — que e exatamente para isso que ela existe.
         run: |
           set -e
-          for produto in addon stremio; do
+          for produto in mirrorstream mirrorview; do
             for f in $produto/src/server.js $(ls $produto/src/core/*.js $produto/src/lib/*.js $produto/src/scrapers/*.js $produto/src/routes/*.js); do
               node -c "$f"
             done
           done
 
-      - name: sintaxe do plugin (nuvio)
+      - name: sintaxe do plugin
         run: |
           set -e
-          for f in $(find nuvio/src -name '*.js') nuvio/build.js nuvio/teste.js; do
+          for f in $(find plugin/src -name '*.js') plugin/build.js plugin/teste.js; do
             node -c "$f"
           done
 
@@ -72,26 +72,32 @@ jobs:
       - name: barra do repo
         run: node --test test/
 
-      - name: barra do addon
-        run: node --test addon/test/
+      - name: barra do MirrorStream
+        run: node --test mirrorstream/test/
 
-      - name: o plugin ainda constroi (15 bundles + manifesto)
+      - name: barra do MirrorView
+        run: node --test mirrorview/test/
+
+      - name: o plugin ainda constroi (11 bundles + manifesto)
         run: |
           npm ci --no-audit --no-fund
           node build.js
-        working-directory: nuvio
+        working-directory: plugin
 
       - name: confere que nenhum teste foi removido
-        # A barreira subiu a cada decisao (191 -> 193 -> 198 -> 201 -> 202 -> 204 -> 224 -> 225 -> 232 -> 259). Um teste que
+        # A barreira subiu a cada decisao (191 -> 193 -> 198 -> 201 -> 202 -> 204 -> 224 -> 225 -> 232 -> 259 -> 285). Um teste que
         # "sumiu" para a build passar e o jeito mais facil de perder regra sem ninguem ver.
-        # 02/10/2026: 259 -> 285 (+18 do contrato de apresentacao do plugin e +7 do
-        # prazo de corpo do `http.js`; +1 do teste que ficou mais granular).
+        # 02/10/2026: 285 -> 279. Caiu porque TV saiu do PLUGIN (decisao do dono): os 9 testes
+        # das 4 fontes de TV foram para o `mirrorview/test/`, e os 6 de rotas de TV do
+        # `mirror.test.js` tambem. Nenhum teste foi apagado sem vir para o produto certo —
+        # o piso agora conta as TRES barreiras somadas.
         run: |
-          addon=$(node --test addon/test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
+          ms=$(node --test mirrorstream/test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
+          mv=$(node --test mirrorview/test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
           repo=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
-          total=$((addon + repo))
-          echo "addon: $addon | repo: $repo | total: $total"
-          if [ "$total" -lt 291 ]; then
-            echo "a barra de testes caiu (esperado 291 ou mais)"
+          total=$((ms + mv + repo))
+          echo "mirrorstream: $ms | mirrorview: $mv | repo: $repo | total: $total"
+          if [ "$total" -lt 279 ]; then
+            echo "a barra de testes caiu (esperado 279 ou mais)"
             exit 1
           fi

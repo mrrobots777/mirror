@@ -1,21 +1,21 @@
-# Dockerfile do ADDON DE CATALOGO (`addon/`) — o produto que serve o catalogo para o Nuvio.
+# Dockerfile do ADDON DE CATALOGO (`mirrorstream/`) — o produto que serve o catalogo para o Nuvio.
 #
 # Este Dockerfile mora na RAIZ do repo de proposito: e' o ponto de entrada que o BeamUp
-# usa (o build roda `docker build .` na raiz), e um Dockerfile dentro de `addon/` exigiria
+# usa (o build roda `docker build .` na raiz), e um Dockerfile dentro de `mirrorstream/` exigiria
 # saber se a plataforma aceita um caminho custom — e nao aceitou ser descubrindo em producao.
-# O repo tem TRES produtos (`nuvio/`, `addon/`, `stremio/`) e este e' o do `addon/`.
+# O repo tem TRES produtos (`nuvio/`, `mirrorstream/`, `stremio/`) e este e' o do `mirrorstream/`.
 FROM node:20-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
-# MEDIDO 02/10/2026: o `package.json` do addon passou a morar em `addon/`. O `COPY` aponta
+# MEDIDO 02/10/2026: o `package.json` do addon passou a morar em `mirrorstream/`. O `COPY` aponta
 # para la e o `npm ci` roda na raiz do WORKDIR, para o `node_modules` ficar onde a
 # resolucao de `require` acha sem depender de onde o processo foi iniciado.
-COPY addon/package*.json ./
+COPY mirrorstream/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY . .
-COPY addon/beamup-start.js /start
+COPY mirrorstream/beamup-start.js /start
 RUN chmod +x /start
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -38,4 +38,4 @@ ENV TV_BASE_URL=https://e75602c18409-mirrorhub2.baby-beamup.club
 ENV TV_PROXY_TIMEOUT_MS=11000
 EXPOSE 3000
 USER node
-CMD ["node", "addon/src/server.js"]
+CMD ["node", "mirrorstream/src/server.js"]

@@ -1,8 +1,10 @@
 node_modules/
 **/node_modules/
-nuvio/node_modules/
-nuvio/dist/
-nuvio/public/idx/
+plugin/node_modules/
+plugin/dist/
+plugin/public/idx/
+mirrorstream/node_modules/
+mirrorview/node_modules/
 .opencode/
 cache/
 .cache/
