@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#08080a">
-  <meta name="description" content="Mirror — Dashboard de métricas do servidor."><title>Mirror — Dashboard</title>
+  <meta name="description" content="MirrorView — Dashboard de métricas do servidor."><title>MirrorView — Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -17,7 +17,17 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; }
-    .grid-bg { background-image: linear-gradient(rgba(229,9,20,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(229,9,20,.03) 1px, transparent 1px); background-size: 40px 40px; }
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(8,8,10,.62), rgba(8,8,10,.88)),
+        linear-gradient(rgba(229,9,20,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(229,9,20,.035) 1px, transparent 1px),
+        url("/mirrorstream-banner.png");
+      background-size: cover, 40px 40px, 40px 40px, cover;
+      background-position: center, center, center, center top;
+      background-repeat: no-repeat, repeat, repeat, no-repeat;
+      background-attachment: fixed, fixed, fixed, fixed;
+    }
 
     header { border-bottom: 1px solid var(--border); background: rgba(8,8,10,.8); backdrop-filter: blur(20px); position: sticky; top: 0; z-index: 50; }
     .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; }
@@ -111,10 +121,11 @@
 <body class="grid-bg">
   <header>
     <div class="header-inner">
-      <a href="/install" class="logo">
-        <img src="/logo.svg?v=1.0.2" alt="Logo Mirror" width="32" height="32">
-        <span>Mirror</span>
-      </a>
+      <!-- SEM LINK: o dashboard e' so por URL (decisao do dono, 02/10/2026). -->
+      <div class="logo">
+        <img src="/mirrorview-logo.png?v=1" alt="Logo MirrorView" width="32" height="32">
+        <span>MirrorView</span>
+      </div>
       <div class="header-right">
         <span id="status-badge" class="badge badge-online"><span class="pulse pulse-green"></span>Online</span>
         <span class="version">v1.0.1</span>
@@ -136,7 +147,7 @@
 
   <div class="refresh-bar"><div class="refresh-fill"></div></div>
 
-  <footer>Mirror 1.0.1</footer>
+  <footer>MirrorView 1.0.1</footer>
 
   <script>
     const $ = s => document.querySelector(s);

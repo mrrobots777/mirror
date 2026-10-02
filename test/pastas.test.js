@@ -368,8 +368,18 @@ test("o Dockerfile e o .dockerignore falam dos tres produtos", () => {
 
   const di = fs.readFileSync(path.join(RAIZ, ".dockerignore"), "utf8").split("\n");
   assert.ok(di.includes("plugin/"), "o plugin nao entra na imagem de nenhum addon");
-  assert.ok(di.includes("mirrorview/"), "o MirrorView nao entra na imagem do MirrorStream");
   assert.ok(di.includes("**/node_modules"), "node_modules de um produto entraria na imagem de outro");
+  // `mirrorview/` NAO pode ser excluido — e' contra-intuitivo, e ja quebrou uma vez:
+  // `mirrorview/Dockerfile` faz `COPY mirrorview/package*.json ./` e
+  // `COPY mirrorview/beamup-start.js /start`, com o CONTEXTO na raiz. Excluir a pasta
+  // deixava as DUAS copias impossiveis de construir, e o deploy da BeamUp nao pegou
+  // porque ela sobe o `./Dockerfile` da raiz. A assercao aqui defendia exatamente o
+  // defeito; quem trava a regra agora e `test/dockerignore.test.js`.
+  assert.equal(
+    di.some((l) => l.trim() === "mirrorview/"),
+    false,
+    "mirrorview/ nao pode estar no .dockerignore — o mirrorview/Dockerfile copia dela"
+  );
   for (const velha of ANTIGAS) {
     assert.equal(di.includes(`${velha}/`), false, `.dockerignore ainda exclui ${velha}/`);
   }

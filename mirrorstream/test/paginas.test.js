@@ -1,7 +1,7 @@
 // AS PAGINAS DO ADDON. Sao tres arquivos que o dono abre no navegador, e elas nao tem nenhum
 // teste: o que existe sao checagens de texto.
 //
-// MOTIVO DESTE ARQUIVO (medido 01/10/2026): o script embutido de `public/tv.html` estaba com a
+// MOTIVO DESTE ARQUIVO (medido 01/10/2026): o script embutido de `public/tv.html` estava com a
 // IIFE **sem fechamento** (`})();` faltando) em TODOS os commits do repositorio — nenhum nunca
 // teve. Isso e um erro de SINTAXE, entao o navegador descartava o script inteiro: a pagina
 // `/tv` nao tinha player, nao tinha P2P e nao mandava o relato de telemetria. O sintoma era
@@ -10,6 +10,11 @@
 //
 // Aqui o script e **executado** pelo parser do Node (`new Function`), que e o mesmo parser que o
 // navegador usa para scripts classicos: fecha ou nao fecha, e o teste falha.
+//
+// MEDIDO 02/10/2026: a pagina `tv.html` foi MOVIDA para o MirrorView. O `/tv` do MirrorStream
+// responde 404 desde a divisao em tres produtos (TV e' do MirrorView), entao a pagina ali era
+// um arquivo morto — e o `mirrorstream/public/tv.html` foi apagado. Este arquivo passou a
+// ler a pagina de TV do outro produto, e as paginas proprias do MirrorStream.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,7 +22,21 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const raiz = path.join(__dirname, "..");
+const view = path.join(raiz, "..", "mirrorview");
+
+// A pagina de TV e' do MIRRORVIEW. As outras duas sao de cada produto.
 const PAGINAS = ["tv.html", "install.html", "dashboard.html"];
+
+// Le a pagina de onde ela estiver. `tv.html` so existe no MirrorView desde 02/10/2026; as
+// outras duas existem em ambos. A primeira versao deste arquivo lia `path.join(raiz, "public",
+// arquivo)` fixo, e isso passou a ser `ENOENT` no MirrorStream quando a tv.html saiu de la.
+const le = (nome) => {
+  for (const base of [raiz, view]) {
+    const p = path.join(base, "public", nome);
+    if (fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  }
+  throw new Error(`pagina nao achada em nenhum produto: ${nome}`);
+};
 
 // Extrai o corpo de cada `<script>` sem atributo (os de `src=` nao tem corpo).
 function scriptsEmbutidos(html) {
@@ -33,7 +52,7 @@ function scriptsEmbutidos(html) {
 
 test("páginas: todo script embutido é JavaScript válido (o /tv estava com a IIFE sem fechar)", () => {
   for (const arquivo of PAGINAS) {
-    const html = fs.readFileSync(path.join(raiz, "public", arquivo), "utf8");
+    const html = le(arquivo);
     const scripts = scriptsEmbutidos(html);
     assert.ok(scripts.length > 0, `${arquivo} nao tem script embutido para checar`);
     for (const [i, s] of scripts.entries()) {
@@ -52,7 +71,7 @@ test("páginas: todo script embutido é JavaScript válido (o /tv estava com a I
 });
 
 test("páginas: o /tv sempre fecha a IIFE que ele abre", () => {
-  const html = fs.readFileSync(path.join(raiz, "public", "tv.html"), "utf8");
+  const html = le("tv.html");
   const corpo = scriptsEmbutidos(html)[0].corpo;
   assert.match(corpo, /^\s*\(function \(\) \{/, "a pagina abre uma IIFE");
   assert.match(corpo.trimEnd(), /\}\)\(\);\s*$/, "e ela tem de terminar com })(); — sem isso o navegador joga o script fora");
@@ -70,7 +89,7 @@ function semComentarios(corpo) {
 }
 
 test("páginas: o P2P usa a API v4 (injectMixin), não a v3 (Engine como loader)", () => {
-  const html = fs.readFileSync(path.join(raiz, "public", "tv.html"), "utf8");
+  const html = le("tv.html");
   const codigo = semComentarios(scriptsEmbutidos(html)[0].corpo);
   // MEDIDO 01/10/2026 na documentacao oficial: em v3 o motor entrava como `loader` na
   // configuracao do hls.js; em v4 ele entra por `HlsJsP2PEngine.injectMixin(Hls)`, que devolve

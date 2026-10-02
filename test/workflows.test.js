@@ -89,5 +89,14 @@ test("o .dockerignore nao vaza o node_modules do plugin nem o mirrorview", () =>
   assert.ok(di.includes("**/node_modules"), "node_modules de um produto entraria na imagem de outro");
   assert.ok(di.includes("**/test/"), "os testes de um produto entrariam na imagem de outro");
   assert.ok(di.includes("plugin/"), "o plugin nao tem porque entrar na imagem de nenhum addon");
-  assert.ok(di.includes("mirrorview/"), "o MirrorView nao tem porque entrar na imagem do MirrorStream");
+  // `mirrorview/` nao pode estar aqui. A regra "o MirrorView nao entra na imagem do
+  // MirrorStream" era minha e estava ERRADA: o `.dockerignore` vale para o CONTEXTO, que e'
+  // a raiz para os dois Dockerfiles, e o `mirrorview/Dockerfile` copia da propria pasta.
+  // Excluir quebrava a imagem do MirrorView sem a BeamUp notar (ela sobe o `./Dockerfile`
+  // da raiz). A regra correta e a de `test/dockerignore.test.js`.
+  assert.equal(
+    di.some((l) => l.trim() === "mirrorview/"),
+    false,
+    "mirrorview/ nao pode estar no .dockerignore — o mirrorview/Dockerfile copia dela"
+  );
 });
