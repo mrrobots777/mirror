@@ -94,7 +94,8 @@ jobs:
           else
             echo "::warning::sem addon no monorepo e sem MIRROR_ADDON_REPO — o gerador usa o catalogo que ja estiver em public/idx/"
             node tools/gerar-indice.js 2>&1 | tee indice.log || echo "::warning::gerador falhou — segue com o indice que estava no repositorio"
-          fi          echo "### indice" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "### indice" >> "$GITHUB_STEP_SUMMARY"
           cat indice.log >> "$GITHUB_STEP_SUMMARY"
 
       - name: build do plugin

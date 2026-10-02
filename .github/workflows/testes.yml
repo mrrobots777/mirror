@@ -87,17 +87,18 @@ jobs:
       - name: confere que nenhum teste foi removido
         # A barreira subiu a cada decisao (191 -> 193 -> 198 -> 201 -> 202 -> 204 -> 224 -> 225 -> 232 -> 259 -> 285). Um teste que
         # "sumiu" para a build passar e o jeito mais facil de perder regra sem ninguem ver.
-        # 02/10/2026: 285 -> 279. Caiu porque TV saiu do PLUGIN (decisao do dono): os 9 testes
-        # das 4 fontes de TV foram para o `mirrorview/test/`, e os 6 de rotas de TV do
-        # `mirror.test.js` tambem. Nenhum teste foi apagado sem vir para o produto certo —
-        # o piso agora conta as TRES barreiras somadas.
+        # 02/10/2026 (2a rodada): 279 -> 286, com o `test/workflows.test.js` novo (7 testes
+        # que pegam o fechamento de bloco colado que derrubou a publicacao, e o caminho
+        # absoluto que quebrava SO na CI). Antes disso, 285 -> 279: TV saiu do PLUGIN
+        # (decisao do dono) e os 15 testes das 4 fontes de TV foram para a pasta do
+        # MirrorView em vez de sumir.
         run: |
           ms=$(node --test mirrorstream/test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
           mv=$(node --test mirrorview/test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
           repo=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
           total=$((ms + mv + repo))
           echo "mirrorstream: $ms | mirrorview: $mv | repo: $repo | total: $total"
-          if [ "$total" -lt 279 ]; then
-            echo "a barra de testes caiu (esperado 279 ou mais)"
+          if [ "$total" -lt 286 ]; then
+            echo "a barra de testes caiu (esperado 286 ou mais)"
             exit 1
           fi

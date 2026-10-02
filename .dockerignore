@@ -10,4 +10,5 @@ scripts/
 .opencode/
 Dockerfile
 .dockerignore
-stremio/
+plugin/
+mirrorview/

@@ -1,0 +1,93 @@
+// Os WORKFLOWS sao codigo e nao eram testados.
+//
+// MEDIDO 02/10/2026, duas vezes na mesma rodada:
+//   1. `publicar-pages` caiu com "syntax error near unexpected token `echo'" — um `fi` tinha
+//      ficado colado no `echo` seguinte, e ninguem executa o workflow antes de subir.
+//   2. `testes` ficou vermelho SO no GitHub, com MODULE_NOT_FOUND em `/home/ubuntu/...`:
+//      um caminho absoluto da minha maquina dentro de um teste.
+//
+// O segundo e' o mais instrutivo: o teste PASSAVA aqui e falhava la. Este arquivo pega os
+// dois na mao, e a CI roda ele antes de qualquer outra coisa.
+const test = require("node:test");
+const assert = require("node:assert");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const RAIZ = path.join(__dirname, "..");
+const WORKFLOWS = [".github/workflows/testes.yml", ".github/workflows/publicar-pages.yml"];
+
+for (const arquivo of WORKFLOWS) {
+  test(`${arquivo}: nenhum fechamento de bloco colado no comando seguinte`, () => {
+    const linhas = fs.readFileSync(path.join(RAIZ, arquivo), "utf8").split("\n");
+    const colados = linhas
+      .map((linha, i) => ({ n: i + 1, linha }))
+      // `fi`/`done` que ainda tem comando na mesma linha: bash nao le `fi echo ...`
+      .filter((x) => /^\s*(fi|done)\s+\S/.test(x.linha));
+    assert.deepStrictEqual(
+      colados.map((x) => `${x.n}: ${x.linha.trim()}`),
+      [],
+      "fechamento colado (foi o que derrubou a publicacao)"
+    );
+  });
+
+  test(`${arquivo}: todo \`if [\` tem um \`fi\``, () => {
+    const texto = fs.readFileSync(path.join(RAIZ, arquivo), "utf8");
+    const abrem = (texto.match(/^\s*if \[/gm) || []).length;
+    const fecham = (texto.match(/^\s*fi\s*$/gm) || []).length;
+    assert.strictEqual(abrem, fecham, `${abrem} \`if [\` e ${fecham} \`fi\``);
+  });
+}
+
+test("nenhum teste do repo tem caminho absoluto (o que so existe na minha maquina)", () => {
+  // MEDIDO 02/10/2026: `test/produtos-sobem.test.js` fazia
+  // `require("/home/ubuntu/mirror/plugin/src/core/fontes.js")`. Passava aqui, quebrava na CI
+  // com MODULE_NOT_FOUND em `/home/runner/...`. Todo caminho tem de vir de `__dirname`.
+  const achados = [];
+  for (const pasta of ["test", "mirrorstream/test", "mirrorview/test"]) {
+    const dir = path.join(RAIZ, pasta);
+    if (!fs.existsSync(dir)) continue;
+    for (const nome of fs.readdirSync(dir)) {
+      if (!nome.endsWith(".js")) continue;
+      const arquivo = path.join(dir, nome);
+      const texto = fs.readFileSync(arquivo, "utf8").split("\n");
+      texto.forEach((linha, i) => {
+        // `/home/<algo>` fora de comentario e fora de string de exemplo e' caminho fixo
+        if (/^\s*(\/\/|\*)/.test(linha)) return;
+        if (!/\/home\/[a-z]/i.test(linha)) return;
+        // o proprio arquivo pode citar o path no comentario que explica o defeito
+        if (/nao existe em|que nao existe|MODULE_NOT_FOUND|passa aqui|foi assim/.test(linha)) return;
+        achados.push(`${pasta}/${nome}:${i + 1}  ${linha.trim().slice(0, 90)}`);
+      });
+    }
+  }
+  assert.deepStrictEqual(achados, [], `caminho absoluto: ${achados.join(" | ")}`);
+});
+
+test("a CI conhece os tres produtos", () => {
+  const testes = fs.readFileSync(path.join(RAIZ, ".github/workflows/testes.yml"), "utf8");
+  for (const produto of ["plugin", "mirrorstream", "mirrorview"]) {
+    assert.ok(
+      testes.includes(produto),
+      `a CI nao menciona ${produto} — um produto sem barreira nao tem rede de seguranca`
+    );
+  }
+  // e o piso conta a soma das tres, nao so de uma
+  assert.match(
+    testes,
+    /total=\$\(\(ms \+ mv \+ repo\)\)/,
+    "o piso tem de somar as tres barreiras"
+  );
+  assert.match(
+    fs.readFileSync(path.join(RAIZ, ".github/workflows/publicar-pages.yml"), "utf8"),
+    /working-directory: plugin/,
+    "a publicacao tem de rodar de dentro do plugin"
+  );
+});
+
+test("o .dockerignore nao vaza o node_modules do plugin nem o mirrorview", () => {
+  const di = fs.readFileSync(path.join(RAIZ, ".dockerignore"), "utf8").split("\n");
+  assert.ok(di.includes("**/node_modules"), "node_modules de um produto entraria na imagem de outro");
+  assert.ok(di.includes("**/test/"), "os testes de um produto entrariam na imagem de outro");
+  assert.ok(di.includes("plugin/"), "o plugin nao tem porque entrar na imagem de nenhum addon");
+  assert.ok(di.includes("mirrorview/"), "o MirrorView nao tem porque entrar na imagem do MirrorStream");
+});

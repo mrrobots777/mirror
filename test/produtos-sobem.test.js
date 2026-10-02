@@ -98,7 +98,10 @@ test("os tres produtos tem identidade propria e os ids nao batem", () => {
   assert.ok(s, "o MirrorView nao declara id com.<marca>.<produto>");
   assert.notStrictEqual(a, s, `os dois usam ${a} — um sobrescreve o outro na lista`);
   // o plugin tambem tem nome, e' o que o Nuvio mostra em Settings -> Plugins
-  const fontes = require("/home/ubuntu/mirror/plugin/src/core/fontes.js");
+  // Caminho RELATIVO ao modulo, nunca absoluto: um path fixo da minha maquina passa aqui e
+  // quebra na CI (foi assim que este teste ficou vermelho so no GitHub — MODULE_NOT_FOUND
+  // em `/home/ubuntu/...`, que nao existe em `/home/runner/...`).
+  const fontes = require(path.join(RAIZ, "plugin", "src", "core", "fontes.js"));
   assert.strictEqual(fontes.NOME_REPOSITORIO, "MirrorStream", "o plugin se chama MirrorStream");
 });
 
