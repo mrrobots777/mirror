@@ -122,8 +122,23 @@ function buildManifest(config) {
   return {
     id: "com.mirrorstream.view", version: "1.0.1", name: `MirrorView${config ? ` [${langLabel}]` : ""}`,
     logo: "/logo.svg",
-    description: "MirrorView — TV ao vivo com guia (EPG), logo e catálogo de 327 canais. Dublado e legendado em português brasileiro.",
-    resources: ["catalog", "meta", "stream"], types: ["tv"],
+    // MEDIDO 02/10/2026: a descricao dizia "Dublado e legendado em portugues brasileiro", e isso
+// e' MENTIRA neste addon. O MirrorView nao entrega stream nenhum — ele entrega o catalogo de
+// canal e o guia (decisoes 154/155: o servidor e' so catalogo). "Dublado e legendado" e' o que
+// o PLUGIN faz, e ele nao tem TV. As duas descricoes seguem a mesma forma
+// ("<Nome> — addon de <conteudo>: <o que entrega>."), que e' o que o dono pediu: que os dois
+// addons falem do mesmo jeito e que cada um diga a verdade sobre si.
+description: "MirrorView — addon de TV ao vivo: catálogo de 327 canais e guia EPG do dia inteiro em português brasileiro.",
+    // `stream` fica no `resources` por OBRIGACAO DA SDK, nao por promessa. MEDIDO 02/10/2026:
+// remover o `stream` mata o processo no boot com
+// `manifest.resources does not contain: stream`, porque a SDK exige que todo handler
+// DEFINIDO esteja em `resources` (`src/builder.js`, `validate`). E a rota de stream precisa
+// continuar definida: o manifesto vive em cache na borda e o Nuvio guarda o que leu, entao um
+// cliente com o manifesto antigo ainda pede — e a resposta tem de ser `{streams: []}` com
+// 200, que e' lida como "nenhuma fonte", e nao um 404, que e' lido como "erro do addon".
+//
+// VER `rotas-stream.test.js`, que trava as TRES rotas e o motivo.
+resources: ["catalog", "meta", "stream"], types: ["tv"],
     idPrefixes: ["tv:live:", "<id>:<start>"],
     config: [
       { id: "lang", type: "text", default: "all", values: ["all", "dubbed", "subtitled"] },
@@ -1402,13 +1417,72 @@ app.get(ROTAS.tv, async (req, res) => {
 });
 
 // ── O que e' do MirrorStream responde 404 COM O NOME ──
-const SO_DO_MIRRORSTREAM = [/^\/api\/vod\//, /^\/api\/streams\//, /^\/stream\//];
+//
+// MEDIDO 02/10/2026: o guard era `[..., /^\/api\/streams\//, /^\/stream\//]`, e ele pegava a
+// PROPRIA rota de TV deste addon:
+//
+//   GET /stream/tv/tv:live:hbo.json  ->  404 {"error":"rota do MirrorStream"}
+//   GET /api/streams/tv/hbo          ->  404 {"error":"rota do MirrorStream"}
+//
+// O addon de TV saying "isso e' do MirrorStream" para o pedido de TV de um canal e' o pior
+// dos dois erros: o cliente le "nao tenho canais" em vez de "nenhuma fonte", e a causa fica
+// invisivel. As tres rotas de stream deste addon (`/stream/tv/…`, `/api/streams/tv/…`,
+// `/nuvio/stream/channel/…`) DEVEM passar e responder `{streams: []}` (decisao 155).
+//
+// O guard entao cobre so o que e' de VOD: o `/api/vod/*`, e o `movie`/`series` das duas
+// rotas de stream. O tipo `tv` nunca entra no padrao.
+const SO_DO_MIRRORSTREAM = [
+  /^\/api\/vod\//,
+  /^\/api\/streams\/(movie|series)(\/|$)/,
+  /^\/(?:[^/]+\/)?stream\/(movie|series)(\/|$)/
+];
 app.use((req, res, next) => {
   if (!SO_DO_MIRRORSTREAM.some((re) => re.test(req.path))) return next();
   res.status(404).json({
     error: "rota do MirrorStream",
     mensagem: "filmes, series e anime sao do MirrorStream, nao do MirrorView"
   });
+});
+
+// ── As TRES rotas de stream, e por que as tres (medido 02/10/2026) ──
+//
+// A decisao 155 diz: "as tres rotas de stream (`/stream/*`, `/api/streams/*`,
+// `/nuvio/stream/*`) respondem `{"streams":[]}` em 200". A excisao de TV que fiz ao dividir
+// os produtos levou as DUAS ultimas: elas respondiam 404 com uma PAGINA HTML de erro do SDK.
+// Um 404 com HTML na tela do Stremio e' lido como "o addon quebrou"; `{streams: []}` com 200
+// e' lido como "nenhuma fonte", que e' a verdade.
+//
+// A primeira (`/stream/tv/…`) continua vindo do `defineStreamHandler` do SDK — por isso ela
+// funciona, e por isso o guard acima teve de ser corrigido para nao intercepta-la.
+
+const VAZIO = { streams: [] };
+
+// O mesmo payload para as tres, e o cache: a resposta e' estavel (decisao 155), nao um link
+// para revalidar. Sem isto, cada pedido ia ao TMDB/REI para descobrir que nao ha o que
+// entregar.
+const VAZIO_TTL = 60 * 1000;
+function streamsVazios(chave) {
+  const guardado = sqliteCache.get(chave);
+  if (guardado) return guardado;
+  sqliteCache.set(chave, VAZIO, VAZIO_TTL);
+  return VAZIO;
+}
+
+app.get(ROTAS.api.streams, (req, res) => {
+  const tipo = String(req.params.type || "");
+  if (!["movie", "series", "tv"].includes(tipo)) {
+    return res.status(400).json({ success: false, error: "type invalido (movie | series | tv)" });
+  }
+  res.set("Cache-Control", "no-store");
+  res.json(streamsVazios(`stream:api:${tipo}:${req.params.id || ""}`));
+});
+
+// A rota do adapter do Nuvio. Ela vivia em `routes/nuvio.js`, que foi para o MirrorStream
+// (que tambem nao tem stream) — entao nenhum dos dois a tem, e ela precisa sair em algum dos
+// dois. Aqui, porque e' o addon que tem o `/nuvio/`.
+app.get(PREFIXOS.nuvio + "/stream/channel/:id", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(streamsVazios(`stream:nuvio:${req.params.id || ""}`));
 });
 
 app.get(ROTAS.manifesto, (req, res) => {

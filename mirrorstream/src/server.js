@@ -120,8 +120,26 @@ function buildManifest(config) {
   return {
     id: "com.mirrorstream.addon", version: "1.0.1", name: `MirrorStream${config ? ` [${langLabel}]` : ""}`,
     logo: "/logo.svg",
-    description: "MirrorStream — Animes, Filmes e Séries em catálogo e player. Dublado e legendado em português brasileiro.",
-    resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
+    description: "MirrorStream — addon de filmes, séries e anime: catálogo e metadados em português brasileiro. Os streams vêm do plugin do Nuvio.",
+    // MEDIDO 02/10/2026: tentei TIRAR o `stream` do `resources` — a intencao era boa (anunciar
+// recurso que nao se entrega faz o Stremio mostrar "nada encontrado" sem pista do porque) e
+// o processo MORREU no boot:
+//
+//     [fatal] uncaughtException: manifest.resources does not contain: stream
+//
+// A regra da SDK e' nos DOIS sentidos (`src/builder.js`, funcao `validate`):
+//
+//   - todo handler DEFINIDO tem que estar em `resources`
+//   - todo item de `resources` tem que ter um handler definido
+//
+// Como a rota de stream PRECISA continuar registrada (o manifesto vive em cache na borda e
+// o Nuvio guarda o que leu, entao um cliente com o manifesto antigo vai pedir essa rota — e
+// um 404 seria lido como "erro do addon", enquanto `{streams: []}` e' lido como "nenhuma
+// fonte"), o handler existe, logo `stream` e' obrigatorio.
+//
+// Ou seja: **nao ha como anunciar "eu nao entrego stream" no manifesto do Stremio.** O melhor
+// sinal disponivel e' a lista vazia com 200, e e' o que a decisao 155 ja tinha escolhido.
+resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
     idPrefixes: ["tt", "kitsu", "tmdb:", "mirror:"],
     config: [
       { id: "lang", type: "text", default: "all", values: ["all", "dubbed", "subtitled"] },
