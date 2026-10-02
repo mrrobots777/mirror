@@ -9,4 +9,4 @@ console.log(
   " SCRAPER_TIMEOUT_MS=" + process.env.SCRAPER_TIMEOUT_MS +
   " BEAMUP_TEST_ENV=" + process.env.BEAMUP_TEST_ENV
 );
-require("/app/src/server.js");
+require("/app/mirrorview/src/server.js");
