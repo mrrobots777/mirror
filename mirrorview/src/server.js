@@ -36,7 +36,6 @@ const { resolveExternal, getMeta: getCinemetaMeta } = require("./scrapers/cineme
 const { probeHlsQuality, browserFetch } = require("./lib/scraper-utils");
 const { resolveUrl: resolveMultiUrl } = require("./lib/url-resolver");
 const memoria = require("./lib/memoria");
-const jogador = require("./lib/jogador");
 const { melhorCorrespondencia } = require("./lib/portao-correspondencia");
 const { engine, buildContext, temFonteDeVod, temFonteDeTv, aqueceTv, CONCURRENCY: SCRAPER_CONCURRENCY } = require("./core/sources");
 const tvSplit = require("./lib/tv-split");

@@ -74,12 +74,18 @@ O push mostra o build (`-----> Building c12e41ddc21b-mirror from Dockerfile`), o
 | `RELAY_BASE_URL` | Não | Relay opcional (ignorado no addon: o relay usa Host por padrão) |
 | `DATA_DIR` | Não | Já fixado em `/tmp` no `Dockerfile` |
 
-## Relay (opcional — 2º app)
+## ~~Relay (opcional — 2º app)~~ — REMOVIDO em 02/10/2026
 
-`Dockerfile.relay` + `relay-server.js`, mesmo padrão (PORT injetada, `USER node`, SIGTERM com drain, `/health`). No addon: `RELAY_BASE_URL=https://<relay>.<dominio-beamup>`. Sem relay o addon funciona — o fallback de M3U8 é o worker Cloudflare (`CDN_PROXY`).
+O relay saiu do servidor na **decisão 155**, junto com `lib/stream-relay.js` e `lib/proxy.js`.
+Com eles foram apagados os processos que os usavam: `relay-server.js`, `br-relay.js`,
+`Dockerfile.relay`, `package-relay.json`, `relay-deploy.sh` e `relay-ecosystem.config.js`.
+
+Não há mais `RELAY_BASE_URL`, nem `/stream/hls/`, nem proxy de VOD: **o servidor de catálogo
+não transporta vídeo**. Quem assiste usa o plugin (`plugin/`), que baixa do IP residencial de
+quem assiste. Ver `CONTEXTO.md`, decisão 155.
 
 ## Legado (não usar em prod)
 
-- `render.yaml` / `render-addon.yaml` — config antiga (Render/belmo); setam `PORT=7000/7100` explicitamente, compatíveis com o código.
-- `deploy.sh` / `relay-deploy.sh` + `ecosystem*.config.js` — PM2 em VPS (`PUBLIC_BASE_URL: ""` = auto-detect do domínio).
-- Execução manual do relay: `PORT=7100 node relay-server.js` (sem env, o fallback é `3000`).
+- `render.yaml` / `render-addon.yaml` — config antiga (Render/belmo); setam `PORT=7000` explicitamente.
+- `deploy.sh` + `ecosystem.config.js` — PM2 em VPS (`PUBLIC_BASE_URL: ""` = auto-detect do domínio).
+- `sync-iptv.sh`, `cluster-health.sh` — utilitários do cluster antigo de TV.

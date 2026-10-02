@@ -1860,3 +1860,81 @@ ssh dokku@a.baby-beamup.club logs e75602c18409-mirrorhub -n 50   # logs do app (
 **BUG QUE EU COMMETI NESTA**: comecei `cdnBoaAte = 0` e testava `Date.now() > cdnBoaAte`, o que deixava a CDN **DESLIGADA desde o primeiro instante** — a contagem mostrava `cdn: 0, painel: 1` com a CDN de pe no ar. O sentido certo e `cdnForaAte` (ate quando ela esta fora), comecando em 0 = ligada. Vale a pena ver a contagem depois de ligar qualquer caminho novo: ela foi o que denunciou.
 
 **O QUE ISSO NAO RESOLVE, e o dono tem de saber**: **nao aumenta quantos canais DIFERENTES o painel entrega ao mesmo tempo.** Isso e a banda da origem (26 Mbps) e o teto de 2 conexoes, e nenhum servidor web muda. MEDIDO: 8 canais diferentes em paralelo -> 3 com 403 e 4 sem lista; **em serie, 10 canais -> 0/10** (embora o teste esteja contaminado pela varredura de verificacao, que ainda competes pelo painel). O que muda e **quantas vezes a origem e chamada**: de uma por espectador para uma por canal a cada 10 s. E o minimo fisico possivel.
+
+## Apps antigos apagados e o codigo que nao servia mais (02/10/2026, 3a rodada)
+
+O dono pediu para apagar os apps antigos e o codigo sem uso. **Os apps foram apagados DEPOIS
+de medir os novos**, porque apagar e' irreversivel e o app antigo (na verdade, meia duzia de
+rotas em 502/504 depois da divisao) foi o que primeiro serviu de comparativo:
+
+```
+rota                            mirrorhub (velho)  mirrorstream (novo)
+/api/vod/genres                 200                200
+/api/vod/search?q=matrix        200                200
+/meta/movie/tmdb:603.json       200                200
+/catalog/tv/mirror-tv-live.json 502                404 (e' do MirrorView)
+/nuvio/catalog/channel/tv.json  504                404 (e' do MirrorView)
+/install, /dashboard            504                200
+```
+
+```
+rota (TV)                       mirrorhub2 (velho)  mirrorview (novo)
+/catalog/tv/mirror-tv-live.json 200                 200   (223 canais -> 327)
+/nuvio/catalog/channel/tv.json  200                 200   (327 com id numerico)
+/api/channels, /tv, /meta/tv/…  200                 200
+```
+
+O novo e' estritamente superior em todas as rotas, entao `beamup delete` foi seguro. Apagados:
+`e75602c18409-mirrorhub` e `e75602c18409-mirrorhub2` (DNS e container removidos; os quatro URLs
+verificados depois: os dois novos 200, os dois antigos 000).
+
+**A armadilha do `beamup delete`:** a CLI deriva o nome do app de `path.basename(process.cwd())`
+(`lib/config.js:10` da `beamup-cli`), ou de um `beamup.json` na pasta. Rodando da raiz do repo
+ela mirou `e75602c18409-**mirror**` — a pasta se chama `mirror` — e falhou com
+"App e75602c18409-mirror does not exist". So que ela **JA TINHA APAGADO O REPOSITORY DO
+DOCKER REGISTRY** antes de falhar no Dokku. Apagar certo exigiu rodar de uma pasta com o
+`beamup.json` nomeando o app. O `beamup.json` da raiz dizia `projectName: "mirror"` e foi
+removido: ele era a causa, nao a solucao.
+
+## O codigo morto, e a ferramenta que o achou
+
+`node tools/achar-orfaos.js` — antes de apagar qualquer coisa, e nao como teste. **A primeira
+versao da ferramenta errou em tres direcoes, e cada uma e' um jeito de perder codigo:**
+
+1. Buscava pelo nome **com** `.js` e acusava `lib/jogador.js` de orfao. O require do projeto e'
+   `require("./lib/jogador")` — **sem extensao**. O arquivo e' usado no `server.js:1593` e
+   apagar teria quebrado o `/api/streams` sem nenhum aviso.
+2. Nao separava **importado** de **chamado**: `mirrorview/src/lib/jogador.js` era importado e
+   nunca invocado, enquanto o gemeo do MirrorStream e' usado. Os dois nao podem ser apagados
+   juntos.
+3. Contava os **arquivos de teste** como orfaos (22 deles), porque teste e' EXECUTADO por
+   `node --test`, nunca importado. Uma ferramenta que acusa a barreira inteira e' uma
+   ferramenta que ninguem vai usar.
+
+E um quarto bug, o mais perigoso dos quatro: a recursao de diretorio **descartava o retorno**,
+e a ferramenta reportava "0 orfaos" com o `src/` cheio de arquivos. **Uma ferramenta de busca
+que devolve vazio sem erro e' pior do que nenhuma** — ela "confirma" que nao ha nada para
+apagar.
+
+**Removidos (13 arquivos, 1626 linhas):** o relay morto pela decisao 155
+(`relay-server.js`, `br-relay.js`, `Dockerfile.relay`, `package-relay.json`, `relay-deploy.sh`,
+`relay-ecosystem.config.js`), ferramentas de TV dentro do addon de VOD
+(`auditoria-tv-user.js`, `fluxo-user-tv.js`), o `mirrorview/src/lib/jogador.js` importado e nunca
+chamado, e os andaimes de execucao unica da divisao (`.ajusta-ci.js`, `.cirurgia.js`,
+`.regras.js`) mais dois arquivos de estado vencidos (`mirror-estado.json`, `beamup.json`).
+
+**Mantido de proposito** (parece velho, mas tem uso): `sync-iptv.sh`, `cluster-health.sh`,
+`ecosystem.config.js`, `deploy.sh`, `render*.yaml`, `Procfile` — todos citados como caminho de
+deploy em `AGENTS.md`/`DEPLOY.md`, e o `Procfile` e' o fallback do buildpack herokuish.
+
+## Uma lacuna que a verificacao ANTES de apagar revelou
+
+`/catalog/movie/top.json` devolve **0 itens**, e o manifesto do MirrorStream declara
+`catalogs: []`. Persegui para ver se era regressao da divisao: **nao era**. O addon nunca
+declarou catalogo de VOD — nem no commit mais antigo do repositorio, onde o manifesto so tinha
+o `mirror-tv-live` de TV. Entao `catalogs: []` e' fiel ao que o codigo sempre fez.
+
+Mas continua sendo uma **lacuna de produto**, e e' do tamanho do produto: o MirrorStream e' o
+addon de filmes e series, e ele nao tem catalogo para o Stremio mostrar. O que ele tem e' a API
+(`/api/vod/search`, `/api/vod/genres`, `/meta/*`, `/api/vod/:type/:id`), que e' o que o Nuvio
+consome. Fechar isso e' trabalho de recurso, nao de limpeza.

@@ -1410,18 +1410,30 @@ ssh dokku@a.baby-beamup.club logs e75602c18409-mirrorhub -n 50   # = beamup logs
 | `wrangler.toml` | Config do worker genérico `mirror-cdn` (`npx wrangler deploy`). Leva `[placement] region = "aws:sa-east-1"` (decisão 123) — **medido: a dica é aceita e gravada, mas não se aplica nesta conta** (até Tóquio deu WAW), então o RTD depende do Smart Placement do `mirror-rtd` |
 | `deploy-workers.sh` | **Um worker por fonte** (decisão 124): publica os 16, e a lista sai do registro único (`WORKERS` em `core/nomes.js`) — nunca escreva `mirror-<fonte>` na mão. `./deploy-workers.sh rtd` publica um só. Só o RTD recebe `[placement] mode = "smart"`. Credencial: `CLOUDFLARE_API_TOKEN` ou `~/.cloudflare-token` (token **de conta** — `/user/tokens/verify` diz "Invalid API Token" mesmo com token bom) |
 | `deploy/nginx-kak.conf` | **nginx na FRENTE do painel, servindo de CDN** (`144.33.21.1:8443`, relay passou para `8444`). `proxy_cache_lock` (1 ida a origem por arquivo, 6 pessoas -> 1) + `keepalive 4` (nunca rajada) + cache em disco 12 GB. Chave de cache **sem o token**. `/cdn/` so aceita `/hlsr/<token>/MirrorPrincipal/…` (403 no resto) |
-| `br-relay.js` | Relay BR na porta8443 (RTD/KKT contra WAF/geo; **só dev** — prod sem caminho Oracle) — systemd `mirror-br-relay` no dev |
-| `beamup-start.js` | Lançador copiado para `/start` (scheduler BeamUp roda `node /start web`) |
+| `beamup-start.js` | Lançador copiado para `/start` (scheduler BeamUp roda `node /start web`) — **tem de `require` o mesmo arquivo que o `CMD` executa** |
 | `Procfile` | `web: npm start` (fallback p/ buildpack herokuish) |
-| `Dockerfile.relay` | Build do relay (app opcional) |
 | `DEPLOY.md` | Passo a passo BeamUp |
 | `ecosystem.config.js` | Config PM2 legado (addon) |
-| `relay-ecosystem.config.js` | Config PM2 legado (relay) |
 | `deploy.sh` | Deploy PM2 legado |
-| `relay-deploy.sh` | Deploy PM2 legado (relay) |
 | `sync-iptv.sh` | Sync iptv.db entre VPSs |
 | `cluster-health.sh` | Monitor de saúde |
 | `.env.example` | Template de config |
+
+**Arquivos REMOVIDOS em 02/10/2026** (todos mortos, nenhum require ou rota os alcança —
+`node tools/achar-orfaos.js` confirma):
+
+| Removido | Por quê |
+|---|---|
+| `relay-server.js`, `br-relay.js`, `Dockerfile.relay`, `package-relay.json`, `relay-deploy.sh`, `relay-ecosystem.config.js` | o **relay saiu do servidor na decisão 155**. `lib/stream-relay.js` e `lib/proxy.js` já tinham sido apagados; estes eram os processos que os usavam. As únicas menções restantes no `AGENTS.md`/`CONTEXTO.md` são em prosa de decisão, e ficam como registro do que foi medido. |
+| `auditoria-tv-user.js`, `fluxo-user-tv.js` | ferramentas de **TV** dentro do addon de **VOD** — depois da divisão, TV é do MirrorView |
+| `mirrorview/src/lib/jogador.js` + o `require` no `mirrorview/src/server.js` | importado e **nunca chamado** no MirrorView (o `/api/streams` dele é 404 por decisão 154/155). Continua vivo no `mirrorstream/src/lib/jogador.js`, onde o `/api/streams` monta `player: jogador.partesDe(...)` |
+| `.ajusta-ci.js`, `.cirurgia.js`, `.regras.js` | andaimes de execução única da divisão (ajustar a CI, cortar o que era do outro produto) |
+| `mirror-estado.json`, `beamup.json` | arquivos de estado vencidos. O `beamup.json` era **prejudicial**: `lib/config.js:10` da CLI lê o `projectName` dele, e ele dizia `mirror` — foi por isso que `beamup delete` mirou `e75602c18409-mirror` em vez de `mirrorhub`. |
+
+> **Um arquivo apagado sem nenhum sintoma é o perigo.** A primeira versão de
+> `tools/achar-orfaos.js` acusava `lib/jogador.js` de órfão porque buscava `jogador.js`, e o
+> require do projeto é `require("./lib/jogador")` — **sem extensão**. O arquivo é usado no
+> `server.js`. Por isso a ferramenta casa os dois e separa *importado* de *chamado*.
 
 ### O nginx na frente do painel (decisao 107)
 
