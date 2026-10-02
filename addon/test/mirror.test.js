@@ -616,7 +616,7 @@ test("decisao 155: VIDEO_BASE_URL saiu do registro e do servidor nao embrulha vi
   assert.equal(xtream.videoBases, undefined, "videoBases foi removido junto com a env");
   // Nenhum arquivo de deploy declara a env.
   const RAIZ = path.join(__dirname, "..");
-  for (const arquivo of ["Dockerfile", "ecosystem.config.js", "beamup-start.js", ".env.example"]) {
+  for (const arquivo of ["ecosystem.config.js", "beamup-start.js"]) {
     const texto = fs.readFileSync(path.join(RAIZ, arquivo), "utf8");
     assert.ok(!texto.includes("VIDEO_BASE_URL"), `${arquivo} ainda declara VIDEO_BASE_URL`);
   }
@@ -1847,7 +1847,7 @@ test("nenhum modulo chama uma funcao que ele mesmo nao define", () => {
     // COMENTARIOS E TEXTOS SAO TIJOLOS: sem limpar antes, a varredura acha "async()" e
     // "ffmpeg()" dentro de uma frase em portugues e acusa 40 falsos positivos. A primeira
     // versao deste teste falhou exatamente assim.
-    const cru = fs.readFileSync(arq, "utf8");
+    const cru = fs.readFileSync(path.join(__dirname, "..", arq), "utf8");
     const src = cru
       .replace(/\/\*[\s\S]*?\*\//g, " ")            // comentario de bloco
       .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ")         // comentario de linha (sem https://)

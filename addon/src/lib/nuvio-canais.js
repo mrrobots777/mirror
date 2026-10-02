@@ -17,7 +17,7 @@ const tvSources = require("../core/tv-sources");
 // `require` ATRASADO e tolerante: se o diretorio `nuvio/` nao vier na imagem (o Dockerfile faz
 // `COPY . .`, mas uma build enxuta pode nao), as 4 rotas do adapter respondem 503 e TODO O RESTO
 // DO ADDON continua funcionando. Um `require` no topo derrubaria o processo no boot.
-const ARQUIVO_DO_MAPA = "../../nuvio/src/lib/canais";
+const ARQUIVO_DO_MAPA = "../../../nuvio/src/lib/canais";
 
 let mapa = undefined;
 let indice = null;

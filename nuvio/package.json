@@ -1,8 +1,8 @@
 {
-  "name": "mirror-nuvio-plugin",
+  "name": "mirrorstream-plugin",
   "version": "1.0.0",
   "private": true,
-  "description": "Plugin Nuvio do Mirror — 15 scrapers (anime, filmes, séries, doramas, TV ao vivo)",
+  "description": "MirrorStream — plugin Nuvio: 15 scrapers (anime, filmes, séries, doramas, TV ao vivo)",
   "scripts": {
     "build": "node build.js",
     "teste": "node teste.js"

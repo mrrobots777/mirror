@@ -1,8 +1,8 @@
 {
-  "name": "Mirror",
+  "name": "MirrorStream",
   "version": "1.0.0",
-  "description": "Fontes do Mirror para o Nuvio: anime, filmes, séries, doramas e TV ao vivo",
-  "author": "Mirror",
+  "description": "MirrorStream — as 15 fontes de anime, filme, série, dorama e TV ao vivo para o Nuvio",
+  "author": "MirrorStream",
   "scrapers": [
     {
       "id": "shg",

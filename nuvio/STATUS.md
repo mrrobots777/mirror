@@ -1,4 +1,4 @@
-# STATUS — plugin Mirror/Nuvio
+# STATUS — MirrorStream (plugin Nuvio)
 
 Data da medição: **01/10/2026** (rodada da reorganização, mesma dia da tabela anterior), com a
 **rodada de 02/10/2026 em §1b** (MIME do player, orçamento do REI, reserva do ATO), a

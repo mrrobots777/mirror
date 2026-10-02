@@ -3,7 +3,10 @@ const assert = require("node:assert");
 const fs = require("fs");
 const path = require("path");
 
+// RAIZ = a raiz do produto que este teste cobre (o addon). REPO = a raiz do monorepo,
+// de onde vem o worker e o deploy — que servem aos tres produtos, nao so ao addon.
 const RAIZ = path.join(__dirname, "..");
+const REPO = path.join(__dirname, "..", "..");
 
 function arquivos(dir, acc = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -53,7 +56,7 @@ test("RTD: worker fixado em Sao Paulo para a API do RTD (decisao 123)", () => {
   // Brasil, e via worker o mesmo — porque o worker roda no data center de quem chamou, entao
   // chamando da prod ele continuava fora e a fonte morria inteira (play-link, catalog-index e
   // video). Sem esta colocacao fixa a prod nao volta a servir RTD.
-  const toml = fs.readFileSync(path.join(RAIZ, "wrangler.toml"), "utf8");
+  const toml = fs.readFileSync(path.join(REPO, "wrangler.toml"), "utf8");
   assert.ok(/^\s*region\s*=\s*"aws:sa-east-1"\s*$/m.test(toml), "worker sem colocacao fixa em aws:sa-east-1");
   assert.ok(!/^\s*region\s*=\s*"aws:(?!sa-east-1)/m.test(toml), "colocacao em outra regiao que nao e Sao Paulo");
 });
@@ -66,14 +69,14 @@ test("um worker por fonte: o deploy sai do registro, e o aquecimento do RTD esta
   //  (b) o `mirror-rtd` deixar de fazer 2 subrequests para o MESMO destino, que e o sinal que
   //      a Cloudflare exige para mover o worker para perto da origem (e o RTD so responde
   //      do Brasil).
-  const sh = fs.readFileSync(path.join(RAIZ, "deploy-workers.sh"), "utf8");
+  const sh = fs.readFileSync(path.join(REPO, "deploy-workers.sh"), "utf8");
   assert.ok(/require\("\.\/src\/core\/nomes"\)/.test(sh), "deploy-workers.sh nao le a lista do registro unico");
   assert.ok(/WORKERS/.test(sh), "deploy-workers.sh nao usa WORKERS do registro");
   assert.ok(!/mirror-(blz|spc|ato|rtd|emb)\b/.test(sh), "deploy-workers.sh tem nome de worker escrito a mao");
   assert.ok(/echo "\[placement\]"/.test(sh) && /echo "mode = \\"smart\\""/.test(sh),
     "o worker do RTD sem Smart Placement (o RTD e o unico que so responde do Brasil)");
 
-  const worker = fs.readFileSync(path.join(RAIZ, "worker-simple.js"), "utf8");
+  const worker = fs.readFileSync(path.join(REPO, "worker-simple.js"), "utf8");
   assert.ok(/function aqueceParaRtd/.test(worker), "o worker perdeu o aquecimento para o Smart Placement");
   assert.ok(/aqueceParaRtd\(targetUrl\)/.test(worker) && /aqueceParaRtd\(decoded\)/.test(worker),
     "o aquecimento precisa entrar nas DUAS rotas que chamam o RTD (/rde/seg e /proxy)");
@@ -85,7 +88,13 @@ test("a VPS do dono nao volta: nenhum arquivo referencia a Oracle nem ao relay B
   // (144.33.21.1) servia apenas o token do KAK, que saiu da TV ao vivo na decisao 108 — o
   // proprio modulo confirmava, em producao, `listasNoCache:0` e `verificados:{ok:0,total:0}`.
   // Este teste falha se alguem reintroduzir o endereco, o nome do relay ou a pasta dele.
-  const alvos = ["src", "worker-simple.js", "Dockerfile", "package.json", "src/server.js"];
+  const alvos = [
+    path.join(RAIZ, "src"),
+    path.join(REPO, "worker-simple.js"),
+    path.join(REPO, "Dockerfile"),
+    path.join(RAIZ, "package.json"),
+    path.join(RAIZ, "src", "server.js")
+  ];
   const proibidos = [/144\.33\.21\.1/, /BR_RELAY_URL/, /BR_TOKEN_URL/, /BR_PLAYLIST_URL/, /br-relay/i];
   const achados = [];
   const anda = (p) => {

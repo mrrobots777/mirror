@@ -3,6 +3,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const path = require("path");
 
+// Este teste e' DO REPO: o worker serve os tres produtos.
 const ALVO = path.join(__dirname, "..", "worker-simple.js");
 
 function fonte() {

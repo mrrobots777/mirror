@@ -183,6 +183,6 @@ test("decisao 155: a variante sem cabecalho saiu do servidor (o worker nao alcan
   }
   assert.equal(/NEEDS_UA/.test(src), false, "nenhuma lista de User-Agent no servidor");
   // E a variante continua onde ela e' util: o plugin tem as 15 fontes e o mesmo problema.
-  const plugin = fs.readFileSync(path.join(__dirname, "..", "nuvio", "src", "core", "fontes.js"), "utf8");
+  const plugin = fs.readFileSync(path.join(__dirname, "..", "..", "nuvio", "src", "core", "fontes.js"), "utf8");
   assert.ok(plugin.includes("rtd") && plugin.includes("dgo"), "o plugin registra as duas fontes que exigem cabecalho");
 });

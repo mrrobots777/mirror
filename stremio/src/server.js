@@ -5,6 +5,14 @@ const { ROTAS, PREFIXOS, ENV, defineEnv, categoriasDasFontes, VARIAVEIS } = requ
 const express = require("express");
 const compression = require("compression");
 const path = require("node:path");
+
+// O `public/` e' resolvido pelo MODULO e nao pelo diretorio de execucao.
+// MEDIDO 02/10/2026: o addon passou a viver em `addon/` dentro do monorepo, e o
+// `WORKDIR` do container e' a raiz do repo — com `process.cwd()` as quatro rotas de
+// pagina apontariam para um `public/` que nao existe ali, e o `express.static` nao
+// serviria nada. Um servidor que so funciona de um diretorio de trabalho e' armadilha:
+// `node src/server.js` dentro de um container e' o mesmo que fora dele.
+const PUBLICO = path.join(__dirname, "..", "public");
 const crypto = require("node:crypto");
 
 // Compara dois segredos sem vazar o quanto eles coincidem: `===` sai no primeiro byte
@@ -113,9 +121,9 @@ function buildManifest(config) {
   const cfg = parseConfig(config);
   const langLabel = { dubbed: "Dublado", subtitled: "Legendado", all: "Todos" }[cfg.lang] || "Todos";
   return {
-    id: "com.mirror.addon", version: "1.0.1", name: `Mirror${config ? ` [${langLabel}]` : ""}`,
+    id: "com.mirrorstream.stremio", version: "1.0.1", name: `MirrorStream Stremio${config ? ` [${langLabel}]` : ""}`,
     logo: "/logo.svg",
-    description: "Mirror — Animes, Filmes, Séries e TV ao vivo. Dublado e legendado em português brasileiro.",
+    description: "MirrorStream — Animes, Filmes, Séries e TV ao vivo. Dublado e legendado em português brasileiro. Addon completo: catálogo E players.",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series", "tv"],
     idPrefixes: ["tt", "kitsu", "tmdb:", "tv:live:", "mirror:"],
     config: [
@@ -1028,7 +1036,7 @@ app.use((req, res, next) => {
 
 app.use(cacheErro.proibeCacheDeErro);
 
-app.use(express.static("public", { maxAge: "1d" }));
+app.use(express.static(PUBLICO, { maxAge: "1d" }));
 
 let clusterTvAssumido = false;
 // AQUECIMENTO DA GUIA (a aba Channel Guide do Stremio).
@@ -1100,8 +1108,8 @@ async function aqueceGuiaDeTv() {
 // Medido agora, na mesma maquina: `/install.html` responde em **0,04s** e `/install` em **12,8s** —
 // o mesmo arquivo, so mudando a rota. Numa pagina estatica nao ha nada que depender de TV, entao
 // estas tres saem antes do repasse.
-app.get(ROTAS.instalacao, (_req, res) => res.sendFile(path.join(process.cwd(), "public", "install.html")));
-app.get(ROTAS.painel, (_req, res) => res.sendFile(path.join(process.cwd(), "public", "dashboard.html")));
+app.get(ROTAS.instalacao, (_req, res) => res.sendFile(path.join(PUBLICO, "install.html")));
+app.get(ROTAS.painel, (_req, res) => res.sendFile(path.join(PUBLICO, "dashboard.html")));
 // A `/tv` so e antecipada quando NAO ha canal pedido: abrir a pagina e o caso comum, e nao
 // precisa de fonte nenhuma. Com `?chan=` continua valendo a rota de baixo, que escolhe o canal.
 app.get(ROTAS.tv, (req, res, next) => {
@@ -1109,7 +1117,7 @@ app.get(ROTAS.tv, (req, res, next) => {
   // fontes). Passa adiante em vez de responder — um redirect para a propria URL seria laco infinito.
   if (req.query.chan) return next();
   res.set("Cache-Control", "no-store");
-  return res.sendFile(path.join(process.cwd(), "public", "tv.html"));
+  return res.sendFile(path.join(PUBLICO, "tv.html"));
 });
 
 app.use((req, res, next) => {
@@ -1318,7 +1326,7 @@ app.get(ROTAS.saude, async (req, res) => {
       forwardedHost: String(req.get("x-forwarded-host") || ""),
       souOClusterDeTv: tvSplit.ehOProprioClusterDeTv(req),
     },
-    name: "Mirror",
+    name: "MirrorStream",
     version: defaultManifest.version,
     uptime: Math.floor(process.uptime()),
     memory: {
@@ -1373,7 +1381,7 @@ app.get(ROTAS.metricas, async (_req, res) => {
 // P2P de verdade (a URL vem do plugin, ja resolvida no aparelho). O `?chan=` responde 404 com a
 // razao, em vez de fingir que achou um canal e redirecionar para um link morto.
 app.get(ROTAS.tv, async (req, res) => {
-  const pagina = path.join(process.cwd(), "public", "tv.html");
+  const pagina = path.join(PUBLICO, "tv.html");
   // sem cache: e player de ao vivo, e o express.static serve com maxAge 1d — o navegador
   // ficaria com uma versao antiga da pagina e o repasse da playlist pararia de funcionar
   res.set("Cache-Control", "no-store");
@@ -1703,7 +1711,7 @@ function mandarAlerta(titulo, f) {
   const agora = Date.now();
   if (estadoAnterior.get("alert:" + chave) && agora - estadoAnterior.get("alert:" + chave) < ALERTA_REPETIR_MS) return;
   estadoAnterior.set("alert:" + chave, agora);
-  const texto = `Mirror — ${titulo}${f.erro ? ` (${f.erro})` : ""}`;
+  const texto = `MirrorStream — ${titulo}${f.erro ? ` (${f.erro})` : ""}`;
   browserFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

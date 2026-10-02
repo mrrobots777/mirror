@@ -26,10 +26,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { apresenta, aoVivo, QUALIDADE_AO_VIVO, EMOJI_TV, rotuloEpisodio } =
-  require("../nuvio/src/lib/apresentacao");
-const fontes = require("../nuvio/src/core/fontes");
+  require("../../nuvio/src/lib/apresentacao");
+const fontes = require("../../nuvio/src/core/fontes");
 
-const RAIZ = path.join(__dirname, "..", "nuvio", "src");
+const RAIZ = path.join(__dirname, "..", "..", "nuvio", "src");
 
 // Os mesmos campos de `com.nuvio.tv.domain.model.LocalScraperResult`.
 const ACEITOS = new Set([
@@ -179,11 +179,11 @@ test("qualifica: preenche a qualidade mas NUNCA inventa", () => {
 });
 
 test("a build embrulha TODO scraper com a qualifica (nao ha como esquecer)", () => {
-  const build = fs.readFileSync(path.join(__dirname, "..", "nuvio", "build.js"), "utf8");
+  const build = fs.readFileSync(path.join(__dirname, "..", "..", "nuvio", "build.js"), "utf8");
   assert.ok(/qualifica\(base\.getStreams/.test(build), "o embrulho da build disappeared");
   assert.ok(/entradaDe\(chave\)/.test(build), "as entradas precisam passar pelo embrulho");
   // E o embrulho precisa mesmo rodar: nenhum bundle pode chamar o `getStreams` cru.
-  const dist = path.join(__dirname, "..", "nuvio", "dist");
+  const dist = path.join(__dirname, "..", "..", "nuvio", "dist");
   if (!fs.existsSync(dist)) return;
   for (const chave of fontes.chaves()) {
     const bundle = fs.readFileSync(path.join(dist, `${chave}.js`), "utf8");

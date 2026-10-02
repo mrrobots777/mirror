@@ -20,13 +20,26 @@ jobs:
       - uses: actions/checkout@v4
 
       # 20 = a versao do Dockerfile de producao (beamup constroi com node:20-slim).
+      # MEDIDO 02/10/2026: `cache: npm` sem `cache-dependency-path` procuraria o
+      # `package-lock.json` na RAIZ — que nao existe desde que o repo virou tres produtos.
+      # As duas dependencias ficam declaradas aqui.
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
+          cache-dependency-path: |
+            addon/package-lock.json
+            stremio/package-lock.json
 
-      - name: instala as dependencias
+      # O repo tem TRES produtos: `nuvio/` (plugin), `addon/` (catalogo para o Nuvio)
+      # e `stremio/` (addon Stremio). Cada um tem o seu package.json e as suas deps.
+      - name: instala as dependencias (addon)
         run: npm ci --no-audit --no-fund
+        working-directory: addon
+
+      - name: instala as dependencias (stremio)
+        run: npm ci --no-audit --no-fund
+        working-directory: stremio
 
       - name: sintaxe do servidor e do scraper (CommonJS)
         # O worker NAO entra aqui: ele e modulo ESM (`export default`) e o `node -c` do
@@ -34,7 +47,16 @@ jobs:
         # propria CI caiu — que e exatamente para isso que ela existe.
         run: |
           set -e
-          for f in src/server.js $(ls src/core/*.js src/lib/*.js src/scrapers/*.js src/routes/*.js); do
+          for produto in addon stremio; do
+            for f in $produto/src/server.js $(ls $produto/src/core/*.js $produto/src/lib/*.js $produto/src/scrapers/*.js $produto/src/routes/*.js); do
+              node -c "$f"
+            done
+          done
+
+      - name: sintaxe do plugin (nuvio)
+        run: |
+          set -e
+          for f in $(find nuvio/src -name '*.js') nuvio/build.js nuvio/teste.js; do
             node -c "$f"
           done
 
@@ -45,8 +67,19 @@ jobs:
           node --check /tmp/worker-check.mjs
           rm -f /tmp/worker-check.mjs
 
-      - name: barra de testes
+      # As tres barreiras. A do repo cobre o que e' dos TRES produtos (worker, segredos,
+      # e o teste que sobe cada servidor de verdade).
+      - name: barra do repo
         run: node --test test/
+
+      - name: barra do addon
+        run: node --test addon/test/
+
+      - name: o plugin ainda constroi (15 bundles + manifesto)
+        run: |
+          npm ci --no-audit --no-fund
+          node build.js
+        working-directory: nuvio
 
       - name: confere que nenhum teste foi removido
         # A barreira subiu a cada decisao (191 -> 193 -> 198 -> 201 -> 202 -> 204 -> 224 -> 225 -> 232 -> 259). Um teste que
@@ -54,9 +87,11 @@ jobs:
         # 02/10/2026: 259 -> 285 (+18 do contrato de apresentacao do plugin e +7 do
         # prazo de corpo do `http.js`; +1 do teste que ficou mais granular).
         run: |
-          total=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
-          echo "testes: $total"
-          if [ "$total" -lt 285 ]; then
-            echo "a barra de testes caiu (esperado 285 ou mais)"
+          addon=$(node --test addon/test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
+          repo=$(node --test test/ 2>&1 | grep -E "^# tests" | awk '{print $3}')
+          total=$((addon + repo))
+          echo "addon: $addon | repo: $repo | total: $total"
+          if [ "$total" -lt 291 ]; then
+            echo "a barra de testes caiu (esperado 291 ou mais)"
             exit 1
           fi

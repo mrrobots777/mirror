@@ -1,16 +1,25 @@
-# Mirror — duas peças
+# Mirror — três produtos
 
-O Mirror deixou de ser um addon só. Ele são **duas peças**, e a divisão é por quem entrega o
-**player** (o link do vídeo):
+Todos os três se chamam **MirrorStream**. A divisão é por **quem entrega o player** (o link
+do vídeo) e por **quem consome**:
 
-| Peça | Onde roda | O que faz |
+| Produto | Onde | O que é |
 |---|---|---|
-| **`mirrorhub`** — este repositório, `src/server.js` | servidor (BeamUp) | **só catálogo**: canais, metas e guia/EPG. Nenhum player, nenhum byte de vídeo |
-| **`mirror`** — [`nuvio/`](nuvio/), o plugin | dentro do app Nuvio, no aparelho | os **players**: as 15 fontes de anime, filme, série, dorama e TV |
+| [`nuvio/`](nuvio/) | dentro do app Nuvio, no aparelho | **plugin**: os **players**, as 15 fontes de anime, filme, série, dorama e TV |
+| [`addon/`](addon/) | servidor (BeamUp) | **só catálogo** para o Nuvio: canais, metas e guia/EPG. Nenhum player, nenhum byte de vídeo |
+| [`stremio/`](stremio/) | servidor | **addon Stremio completo**: catálogo **e** players, num servidor só |
 
-O dono decidiu em duas etapas (decisões 154 e 155, 02/10/2026): **o Nuvio é o único cliente**,
-os players passam a vir **exclusivamente do plugin**, e **este servidor não entrega vídeo nenhum**
-— nem de VOD, nem de TV.
+Quem usa **Nuvio** instala o plugin `nuvio/` e o servidor `addon/` serve o catálogo.
+Quem usa **Stremio** instala o `stremio/` e não precisa de mais nada.
+
+Os três são **produtos separados de verdade**: cada um tem o seu `package.json`, o seu
+`Dockerfile` e os seus testes. O que é comum a eles — o worker, o deploy, o `.gitignore`, os
+docs — fica na raiz.
+
+O dono decidiu em duas etapas (decisões 154 e 155, 02/10/2026): para o **Nuvio**, os players vêm
+**exclusivamente do plugin**, e o servidor `addon/` não entrega vídeo nenhum — nem de VOD, nem
+de TV. O `stremio/` é a exceção que o dono pediu depois: lá o servidor volta a ser o dono do
+player, porque quem consome é o Stremio e não existe plugin para ele.
 
 ```
 aparelho (Nuvio)

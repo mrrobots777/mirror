@@ -31,11 +31,11 @@ function rotuloDe(grupo, sigla) {
   return `${GRUPOS[grupo]} | ${sigla}`;
 }
 
-const NOME_REPOSITORIO = "Mirror";
+const NOME_REPOSITORIO = "MirrorStream";
 const VERSAO_REPOSITORIO = "1.0.0";
 const VERSAO_SCRAPER = "1.0.0";
 const DESCRICAO_REPOSITORIO =
-  "Fontes do Mirror para o Nuvio: anime, filmes, séries, doramas e TV ao vivo";
+  "MirrorStream — as 15 fontes de anime, filme, série, dorama e TV ao vivo para o Nuvio";
 
 const FONTES = {
   shg: {

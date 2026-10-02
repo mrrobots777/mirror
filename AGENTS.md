@@ -947,7 +947,7 @@ TV (nuvio/tools/bateria-tv.js, 16 canais × 4 fontes):
   emb 6/16 · etc 6/16 · rcd 4/16                               (iguais ao antes)
   rei sem stream: 1021/1041/1101 — playlist morta na origem deles
 
-node --test test/   # 285  (259 + 18 do contrato de apresentação + 7 do prazo de corpo + 1 repartido, todos SEM rede)
+node --test test/ addon/test/   # 291  (285 + 6 que sobem os dois servidores; tudo SEM rede)
 ```
 
 Os 12 novos: contrato do `sinaliza` · os 4 emissores assinando · os tetos do orçamento do REI ·
@@ -992,6 +992,51 @@ mudam para quem mexe no plugin:
 `nuvio/tools/bateria-completa.js` é a bateria do pedido (15 fontes × N casos: tempo, entrega,
 contrato, qualidade, link vivo, e "o canal não existe nesta fonte" separado de "a fonte tem e
 não entregou"). Medido depois: **16/16 casos tentados entregam stream, 0 erro, 0 vazio.**
+
+### O nome é MirrorStream (02/10/2026)
+
+Os três produtos se chamam **MirrorStream**. No repositório ja esta feito o que e' nome de
+**exibicao**: `manifest.name` do plugin (`Mirror` → `MirrorStream`), o `name`/`/health` dos dois
+addons, e os `id` (`com.mirror.addon` → `com.mirrorstream.addon`, `com.mirror.stremio` →
+`com.mirrorstream.stremio`). Os dois `id` sao diferentes de proposito — dois addons com o mesmo
+id nao convivem, e ha teste que falha se voltarem a ser iguais.
+
+**A sigla da fonte nao mudou** (`SHG`, `SPT`, `REI`...): e' o badge do card, com `maxLines = 1`,
+e e' o que o usuario reconhece.
+
+**Fica pendente de producao** (nao e' coisa de repositorio): o **endereco do BeamUp** — o nome do
+app no BeamUp **e'** a URL, entao renomear `mirrorhub` para `mirrorstream` cria um endereco novo e
+exige remover o app antigo; e a **URL do plugin**, que hoje e'
+`https://mrrobots777.github.io/mirror/` — de onde o Nuvio instala. Se o repo for renomeado,
+quem ja instalou para de receber atualizacao ate instalar de novo. Detalhe em `CONTEXTO.md`.
+
+### A separação em três produtos (02/10/2026)
+
+O repo deixou de ter um servidor e passou a ter **três produtos**: `nuvio/` (plugin, os players
+dentro do app), `addon/` (servidor de **só catálogo** para o Nuvio) e `stremio/` (addon Stremio
+completo, catálogo **e** players). O `addon/` é a raiz antiga; `stremio/` nasceu como cópia
+dele com **id próprio** (`com.mirror.stremio` ≠ `com.mirror.addon` — dois addons com o mesmo id
+não convivem).
+
+Detalhe e a lista do que falta para o `stremio/` ter player: `stremio/README.md`. Resumo em
+`CONTEXTO.md`.
+
+**Ao mexer em qualquer produto, quatro coisas já quebraram uma vez** (todas com teste agora):
+
+1. `public/` não pode ser resolvido por `process.cwd()` — o cwd do container é a raiz do repo e
+   as quatro rotas de página apontariam para um `public` inexistente. Use
+   `path.join(__dirname, "..", "public")` (`PUBLICO`).
+2. **Teste que abre arquivo por `cwd` é armadilha** — passa na CI (que roda da raiz) e falha na
+   sua máquina. Todo arquivo se abre por caminho absoluto derivado do módulo. Foi assim que
+   `readFileSync("src/server.js")` passou a ler a raiz.
+3. `nuvio/` referencia o addon por `../../addon/`, não `../../`.
+4. O `Dockerfile` da raiz (BeamUp) construi o `addon/`: `COPY addon/package*.json`,
+   `COPY addon/beamup-start.js /start`, `CMD ["node", "addon/src/server.js"]`.
+
+**Barreiras:** `addon/test/` = 276 (o servidor de catálogo, com os testes do contrato do plugin),
+`test/` = 15 (o repo: segredos, worker, deploy e `produtos-sobem.test.js`, que **sobe os dois
+servidores de verdade**). Piso do CI: **291**. A lição da 155 continua valendo: **texto não
+executa** — se o servidor não imprimir `[Mirror] listening on`, o teste falha.
 
 **Só se prova no aparelho (3 coisas, documentadas em `nuvio/STATUS.md` §4):** o teto de 1 MB do
 sandbox (bytes de rede ou corpo decodificado) · o bloqueio de IP de datacenter (vídeo do ATO, CDN
@@ -1115,7 +1160,7 @@ A categoria de cada fonte é declarada **uma vez** em `src/core/nomes.js` (`FONT
 > **Node local = 18 (`/usr/bin/node`), não o 22.** O `better-sqlite3` foi compilado (09/2025) contra o ABI do **Node 18**; rodar com o Node 22 (`/tmp/node-v22.*`) faz `sqlite-cache.js` **despejar core (SIGSEGV, exit 139)** logo no boot — o processo morre sem mensagem nenhuma no log, só `[dns] Cloudflare DNS ativo` e nada mais. Parece bug de código e não é: `require('./src/lib/sqlite-cache')` isolado reproduz. Para confirmar em 5s: `/usr/bin/node -e "require('./src/lib/sqlite-cache')"` (node18 → `opened cache.db`; node22 → core dump).
 
 ```bash
-# Testes unitários (barreira: 285)
+# Testes unitários (barreiras: repo `test/` + addon `addon/test/`; piso do CI 291)
 node --test test/
 
 # Verificar sintaxe

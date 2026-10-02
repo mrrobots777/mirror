@@ -1254,6 +1254,107 @@ ou corpo decodificado) · o 403/235 B de origem que recusa IP de datacenter (ATO
 
 
 
+## O nome é MirrorStream — e o que ainda depende de produção (02/10/2026)
+
+O dono: *"o nome do addon e do plugin é MirrorStream, o plugin também vai ser esse nome e pode
+colocar também como endereço do beamup"*.
+
+**O que já está feito no repositório** (nome de exibição — o que o usuário vê na tela):
+
+| onde | antes | agora |
+|---|---|---|
+| plugin, `manifest.name` (Settings → Plugins do Nuvio) | `Mirror` | **`MirrorStream`** |
+| plugin, `author` | `Mirror` | **`MirrorStream`** |
+| addon, `manifest.name` / `/health` | `Mirror` | **`MirrorStream`** |
+| addon, `manifest.id` | `com.mirror.addon` | **`com.mirrorstream.addon`** |
+| stremio, `manifest.name` | `Mirror Stremio` | **`MirrorStream Stremio`** |
+| stremio, `manifest.id` | `com.mirror.stremio` | **`com.mirrorstream.stremio`** |
+| `package.json` (`name`) | `mirror-stremio-addon` (os dois, colidindo) | `mirrorstream-addon` / `mirrorstream-stremio` / `mirrorstream-plugin` |
+
+**Os `id` são diferentes entre os dois addons de propósito**: dois addons com o mesmo `id` não
+convivem — o segundo sobrescreve o primeiro na lista e o usuário perde um sem nenhuma mensagem.
+Há teste (`test/produtos-sobem.test.js`) que falha se eles voltarem a ser iguais.
+
+A sigla de cada fonte (`SHG`, `SPT`, `REI`…) **não mudou** — é o badge da fonte no card, com
+`maxLines = 1`, e a sigla é o que o usuário reconhece. Ver `nuvio/STATUS.md` §1c.
+
+### O que NÃO foi feito, porque é produção e precisa de decisão
+
+1. **O endereço do BeamUp.** Hoje os apps são `mirrorhub` (catálogo) e `mirrorhub2` (cluster de
+   TV), sob o hash `e75602c18409`, e a URL é `https://e75602c18409-mirrorhub.baby-beamup.club`.
+   O dono quer **MirrorStream** como endereço. No BeamUp o nome do app **é** o endereço: trocar
+   o nome cria um **endereço novo** (`<hash>-mirrorstream.baby-beamup.club`), e os apps antigos
+   precisam ser removidos à mão. Isso é operação de produção, não de repositório — e o
+   `PUBLIC_BASE_URL`/`TV_BASE_URL` do `Dockerfile` precisam do valor novo.
+
+2. **A URL do plugin.** O repositório é `mrrobots777/mirror` e o Pages publica em
+   `https://mrrobots777.github.io/mirror/`. É **dessa URL** que o Nuvio instala o plugin.
+   Renomear o repositório para `mirrorstream` deixaria de fora **quem já instalou** — o Nuvio
+   busca pelo repositório salvo. Se o dono quiser, dá para publicar **os dois** nomes por um
+   tempo.
+
+3. **O deploy em si.** O `Dockerfile` da raiz mudou (`COPY addon/package*.json`,
+   `CMD ["node", "addon/src/server.js"]`). **A produção só volta a subir depois de um deploy com
+   o Dockerfile novo** — antes disso o build falha por `COPY` não encontrado.
+## A separação em três produtos — 02/10/2026
+
+O dono pediu para separar o projeto: **plugin Nuvio**, **addon de catálogo para o Nuvio**, e
+uma pasta **`stremio/`** com o addon completo (catálogo **e** streams).
+
+```
+nuvio/     plugin       os players rodam DENTRO do app (15 fontes)      [não mudou]
+addon/     servidor     só catálogo para o Nuvio: canais, guia, meta    [era a raiz]
+stremio/   servidor     addon Stremio completo: catálogo E players      [novo]
+raiz       o que é dos três: worker, deploy, .gitignore, docs, Dockerfile do addon
+```
+
+**A decisão que muda o desenho:** `stremio/` é a **etapa 1**. Ele já sobe, tem `id` próprio
+(`com.mirror.stremio`, diferente do `com.mirror.addon` de propósito — dois addons com o mesmo
+`id` não convivem) e serve o catálogo inteiro. A **camada de player dele é a etapa 2**, porque
+**o código não está no histórico**: o repo foi compactado em 7 commits (todos "1.0.1") e as
+decisões 154/155 apagaram o relay, o proxy, 3 das 4 fontes de TV e o registro das 10 fontes de
+VOD. O que sobrou são os arquivos dos scrapers e o motor. A lista do que falta está em
+[`stremio/README.md`](stremio/README.md).
+
+### O que a separação quebrou e foi corrigido (tudo coberto por teste)
+
+| defeito | correção |
+|---|---|
+| `public/` resolvido por `process.cwd()` — no container o cwd é a raiz do repo e as 4 rotas de página apontariam para um `public/` inexistente | `const PUBLICO = path.join(__dirname, "..", "public")` nos dois servidores |
+| `nuvio-canais.js` lia o mapa do plugin com `../../nuvio/...` — o addon desceu um nível | `../../../nuvio/...` |
+| `Dockerfile` (BeamUp) fazia `CMD node src/server.js` e `COPY package*.json` da raiz | `addon/package*.json`, `addon/beamup-start.js`, `CMD node addon/src/server.js` |
+| `cache: npm` da CI procurava `package-lock.json` na raiz, que não existe mais | `cache-dependency-path` com os dois lockfiles |
+| `.dockerignore` só excluía o `node_modules` da raiz — o do plugin entrava na imagem do addon | `**/node_modules`, `**/test/` |
+| testes liam arquivo **por `cwd`** (passavam por acidente na CI, que rodava da raiz) | todo arquivo abre por caminho absoluto derivado do módulo |
+
+### Onde cada teste mora, e por quê
+
+- **`addon/test/`** (276) — o servidor de catálogo. Inclui os `nuvio-*.test.js`, que exercitam
+  `../../nuvio/src` mas ficam aqui porque é daqui que a barreira roda.
+- **`test/`** (15) — o que é do **repo**: `.gitignore`, segredos, o worker, o deploy dos workers
+  e **`produtos-sobem.test.js`**, que **sobe os dois servidores de verdade**.
+- **`stremio/test/`** — reservado para a etapa 2 (os testes da camada de player).
+
+`produtos-sobem.test.js` existe pela lição da 155: **texto não executa**. Duas vezes um
+`require` quebrado e uma `app.listen` apagada passaram a barreira inteira — o servidor não subia
+e o processo saía com código 0, sem escutar e sem erro. Agora, se um `src/server.js` não
+imprimir `[Mirror] listening on`, o teste falha.
+
+### Como rodar
+
+```bash
+addon:     cd addon    && npm ci && PORT=7000 node src/server.js
+stremio:   cd stremio  && npm ci && PORT=7802 node src/server.js
+plugin:    cd nuvio    && npm ci && node build.js          # 15 bundles + manifest
+
+barreiras: node --test test/ && node --test addon/test/
+imagens:   docker build -t mirror-addon .                  # Dockerfile da raiz
+           docker build -f stremio/Dockerfile -t mirror-stremio .
+```
+
+**Atenção ao deploy:** o `Dockerfile` da raiz passou a copiar `addon/`, então a **produção
+(BeamUp) só continua de pé depois de um deploy com o Dockerfile novo**. Antes disso, o build
+falha por `COPY addon/package*.json` não encontrado.
 ## Rodada 02/10/2026 (2ª) — o plugin Nuvio: contrato de tela, prazo de corpo e qualidade real
 
 O dono pediu bateria ponta a ponta, velocidade, "100% das fontes sempre pesquisadas e, se achar,

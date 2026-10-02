@@ -1,9 +1,13 @@
 node_modules
+**/node_modules
 .git
 .env
+**/.env
 *.md
 test/
+**/test/
 scripts/
 .opencode/
 Dockerfile
 .dockerignore
+stremio/

@@ -18,7 +18,7 @@ const ncanais = require("../src/lib/nuvio-canais");
 const nuvio = require("../src/routes/nuvio");
 const tvSources = require("../src/core/tv-sources");
 
-const mapa = require("../nuvio/src/lib/canais");
+const mapa = require("../../nuvio/src/lib/canais");
 
 // O MAPA QUE O PLUGIN USA. O addon nao pode ter o seu: se o require falhar, as 4 rotas
 // respondem 503 e o resto do addon continua de pe.

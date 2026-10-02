@@ -21,10 +21,10 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { sinaliza } = require("../nuvio/src/lib/hls");
-const painel = require("../nuvio/src/lib/painel");
+const { sinaliza } = require("../../nuvio/src/lib/hls");
+const painel = require("../../nuvio/src/lib/painel");
 
-const RAIZ = path.join(__dirname, "..", "nuvio", "src");
+const RAIZ = path.join(__dirname, "..", "..", "nuvio", "src");
 
 function fonte(nome) {
   return fs.readFileSync(path.join(RAIZ, "scrapers", nome), "utf8");
@@ -192,7 +192,7 @@ async function comOrigem(opcoes, fn) {
 
 test("REI: playlist viva vira stream com o formato sinalizado na URL", async () => {
   await comOrigem({ playlistStatus: 200 }, async (dupla) => {
-    const rei = require("../nuvio/src/scrapers/reidosembeds");
+    const rei = require("../../nuvio/src/scrapers/reidosembeds");
     const lista = await rei.getStreams("1140", "channel", null, null);
     assert.strictEqual(lista.length, 1, "a cadeia resolveu e a playlist tem segmento");
     // Contrato do app (ver `nuvio/src/lib/apresentacao.js`): a linha 1 e o QUE E —
@@ -211,7 +211,7 @@ test("REI: playlist viva vira stream com o formato sinalizado na URL", async () 
 
 test("REI: playlist que responde 404 vira lista vazia, e nao erro de fonte", async () => {
   await comOrigem({ playlistStatus: 404 }, async (dupla) => {
-    const rei = require("../nuvio/src/scrapers/reidosembeds");
+    const rei = require("../../nuvio/src/scrapers/reidosembeds");
     const lista = await rei.getStreams("1140", "channel", null, null);
     assert.deepEqual(lista, [], "a origem RESPONDEU e nao tem playlist: e' lista vazia");
     // A segunda tentativa (o `src` deles rotaciona) roda porque sobrou orcamento.
@@ -222,7 +222,7 @@ test("REI: playlist que responde 404 vira lista vazia, e nao erro de fonte", asy
 
 test("REI: 404 na cadeia tambem e lista vazia (a origem respondeu)", async () => {
   await comOrigem({ embedStatus: 404 }, async () => {
-    const rei = require("../nuvio/src/scrapers/reidosembeds");
+    const rei = require("../../nuvio/src/scrapers/reidosembeds");
     assert.deepEqual(await rei.getStreams("1140", "channel", null, null), []);
   });
 });
@@ -232,7 +232,7 @@ test("REI: falha de REDE sobe como erro — nunca vira lista vazia", async () =>
   // Rede, timeout e 5xx sobem, para o cliente marcar a fonte como degradada em vez de
   // guardar "esse canal nao tem nada".
   await comOrigem({ rede: /v2\.rdembed\.sbs/ }, async () => {
-    const rei = require("../nuvio/src/scrapers/reidosembeds");
+    const rei = require("../../nuvio/src/scrapers/reidosembeds");
     await assert.rejects(() => rei.getStreams("1140", "channel", null, null), /fetch failed|falha de rede/);
   });
 });

@@ -12,7 +12,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const http = require("../nuvio/src/lib/http");
+const http = require("../../nuvio/src/lib/http");
 
 function comFetch(duplo, fn) {
   const anterior = globalThis.fetch;
